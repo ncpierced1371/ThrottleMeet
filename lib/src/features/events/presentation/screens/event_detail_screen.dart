@@ -66,18 +66,23 @@ class _EventDetailBody extends StatelessWidget {
                   label: 'When',
                   value: DateTimeFormatter.shortDateTime(
                     context,
-                    event.scheduledAt,
+                    event.startTime,
                   ),
                 ),
                 _DetailRow(
                   icon: Icons.place_outlined,
                   label: 'Where',
-                  value: event.location,
+                  value: event.locationName,
                 ),
                 _DetailRow(
                   icon: Icons.person_outline,
                   label: 'Host',
                   value: event.hostName,
+                ),
+                _DetailRow(
+                  icon: Icons.group_outlined,
+                  label: 'Attendees',
+                  value: '${event.attendeeCount}',
                 ),
               ],
             ),

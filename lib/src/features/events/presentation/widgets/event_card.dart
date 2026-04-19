@@ -34,7 +34,7 @@ class EventCard extends StatelessWidget {
                         Text(
                           DateTimeFormatter.shortDateTime(
                             context,
-                            event.scheduledAt,
+                            event.startTime,
                           ),
                           style: theme.textTheme.bodyMedium,
                         ),
@@ -55,7 +55,10 @@ class EventCard extends StatelessWidget {
                 spacing: 12,
                 runSpacing: 8,
                 children: [
-                  _MetaPill(icon: Icons.place_outlined, label: event.location),
+                  _MetaPill(
+                    icon: Icons.place_outlined,
+                    label: event.locationName,
+                  ),
                   _MetaPill(icon: Icons.person_outline, label: event.hostName),
                 ],
               ),

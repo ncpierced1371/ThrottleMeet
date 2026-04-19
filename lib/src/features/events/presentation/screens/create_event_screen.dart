@@ -182,20 +182,23 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
     });
 
     final messenger = ScaffoldMessenger.of(context);
-    final scheduledAt = DateTime(
+    final startTime = DateTime(
       _selectedDate!.year,
       _selectedDate!.month,
       _selectedDate!.day,
       _selectedTime!.hour,
       _selectedTime!.minute,
     );
+    final endTime = startTime.add(const Duration(hours: 2));
     final event = Event(
-      id: _buildId(_titleController.text.trim(), scheduledAt),
+      id: _buildId(_titleController.text.trim(), startTime),
       title: _titleController.text.trim(),
       description: _descriptionController.text.trim(),
-      location: _locationController.text.trim(),
+      locationName: _locationController.text.trim(),
       hostName: _hostController.text.trim(),
-      scheduledAt: scheduledAt,
+      startTime: startTime,
+      endTime: endTime,
+      attendeeCount: 0,
       rsvpStatus: RsvpStatus.going,
     );
 
@@ -217,12 +220,12 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
     return null;
   }
 
-  String _buildId(String title, DateTime scheduledAt) {
+  String _buildId(String title, DateTime startTime) {
     final slug = title
         .toLowerCase()
         .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
         .replaceAll(RegExp(r'^-|-$'), '');
 
-    return '$slug-${scheduledAt.millisecondsSinceEpoch}';
+    return '$slug-${startTime.millisecondsSinceEpoch}';
   }
 }

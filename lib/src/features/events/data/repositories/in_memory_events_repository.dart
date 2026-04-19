@@ -25,7 +25,7 @@ class InMemoryEventsRepository implements EventsRepository {
   @override
   Future<List<Event>> getEvents() async {
     final events = [..._events];
-    events.sort((a, b) => a.scheduledAt.compareTo(b.scheduledAt));
+    events.sort((a, b) => a.startTime.compareTo(b.startTime));
     return events;
   }
 

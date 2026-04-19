@@ -9,9 +9,11 @@ class SeedEvents {
         title: 'Spring Canyon Run',
         description:
             'An easy Saturday drive with a coffee meetup, scenic pull-offs, and a relaxed social pace.',
-        location: 'Cold Spring Ridge',
+        locationName: 'Cold Spring Ridge',
         hostName: 'ThrottleMeet Crew',
-        scheduledAt: DateTime(2026, 5, 2, 9, 30),
+        startTime: DateTime(2026, 5, 2, 9, 30),
+        endTime: DateTime(2026, 5, 2, 11, 30),
+        attendeeCount: 18,
         rsvpStatus: RsvpStatus.going,
       ),
       Event(
@@ -19,9 +21,11 @@ class SeedEvents {
         title: 'Sunset Downtown Meet',
         description:
             'Golden-hour meetup for builds, photos, and a short city cruise after everyone rolls in.',
-        location: 'Foundry Square',
+        locationName: 'Foundry Square',
         hostName: 'Maya R.',
-        scheduledAt: DateTime(2026, 5, 7, 18, 0),
+        startTime: DateTime(2026, 5, 7, 18, 0),
+        endTime: DateTime(2026, 5, 7, 20, 0),
+        attendeeCount: 26,
         rsvpStatus: RsvpStatus.interested,
       ),
       Event(
@@ -29,9 +33,11 @@ class SeedEvents {
         title: 'Early Bird Cars & Coffee',
         description:
             'Simple morning meetup focused on showing up, meeting people, and getting out before traffic.',
-        location: 'Northline Market',
+        locationName: 'Northline Market',
         hostName: 'Jordan K.',
-        scheduledAt: DateTime(2026, 5, 16, 8, 0),
+        startTime: DateTime(2026, 5, 16, 8, 0),
+        endTime: DateTime(2026, 5, 16, 10, 0),
+        attendeeCount: 12,
         rsvpStatus: RsvpStatus.notGoing,
       ),
     ];
