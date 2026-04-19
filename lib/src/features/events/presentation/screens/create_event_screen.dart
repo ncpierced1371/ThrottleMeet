@@ -1,10 +1,17 @@
 import 'package:flutter/material.dart';
 
-import '../../../../app_scope.dart';
 import '../../../../core/utils/date_time_formatter.dart';
+import '../../domain/entities/event.dart';
+import '../../domain/entities/rsvp_status.dart';
+import '../controllers/events_controller.dart';
 
 class CreateEventScreen extends StatefulWidget {
-  const CreateEventScreen({super.key});
+  const CreateEventScreen({
+    super.key,
+    required this.controller,
+  });
+
+  final EventsController controller;
 
   @override
   State<CreateEventScreen> createState() => _CreateEventScreenState();
@@ -45,7 +52,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
             padding: const EdgeInsets.all(16),
             children: [
               Text(
-                'Create a simple event for Phase 1.',
+                'Create a simple event.',
                 style: Theme.of(context).textTheme.titleMedium,
               ),
               const SizedBox(height: 16),
@@ -182,14 +189,17 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
       _selectedTime!.hour,
       _selectedTime!.minute,
     );
-
-    await AppScope.of(context).eventsController.createNewEvent(
+    final event = Event(
+      id: _buildId(_titleController.text.trim(), scheduledAt),
       title: _titleController.text.trim(),
       description: _descriptionController.text.trim(),
       location: _locationController.text.trim(),
       hostName: _hostController.text.trim(),
       scheduledAt: scheduledAt,
+      rsvpStatus: RsvpStatus.going,
     );
+
+    await widget.controller.createNewEvent(event);
 
     if (!mounted) {
       return;
@@ -205,5 +215,14 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
     }
 
     return null;
+  }
+
+  String _buildId(String title, DateTime scheduledAt) {
+    final slug = title
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
+        .replaceAll(RegExp(r'^-|-$'), '');
+
+    return '$slug-${scheduledAt.millisecondsSinceEpoch}';
   }
 }

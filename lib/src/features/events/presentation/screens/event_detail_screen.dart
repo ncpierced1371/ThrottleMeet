@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../../../../app_scope.dart';
 import '../../../../core/utils/date_time_formatter.dart';
 import '../../../../core/widgets/app_empty_state.dart';
 import '../../domain/entities/event.dart';
@@ -9,18 +8,21 @@ import '../controllers/events_controller.dart';
 import '../widgets/rsvp_selector.dart';
 
 class EventDetailScreen extends StatelessWidget {
-  const EventDetailScreen({super.key, required this.eventId});
+  const EventDetailScreen({
+    super.key,
+    required this.controller,
+    required this.eventId,
+  });
 
+  final EventsController controller;
   final String eventId;
 
   @override
   Widget build(BuildContext context) {
-    final controller = AppScope.of(context).eventsController;
-
     return AnimatedBuilder(
       animation: controller,
       builder: (context, _) {
-        final event = controller.eventById(eventId);
+        final event = controller.getEventById(eventId);
 
         return Scaffold(
           appBar: AppBar(title: const Text('Event Detail')),
@@ -113,7 +115,7 @@ class _EventDetailBody extends StatelessWidget {
     String eventId,
     RsvpStatus status,
   ) async {
-    await controller.setRsvpStatus(eventId: eventId, status: status);
+    await controller.updateRsvp(eventId: eventId, status: status);
 
     if (!context.mounted) {
       return;

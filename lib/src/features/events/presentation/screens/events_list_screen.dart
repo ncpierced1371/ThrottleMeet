@@ -1,17 +1,27 @@
 import 'package:flutter/material.dart';
 
-import '../../../../app_scope.dart';
-import '../../../../core/navigation/app_router.dart';
 import '../../../../core/widgets/app_empty_state.dart';
 import '../controllers/events_controller.dart';
+import 'create_event_screen.dart';
+import 'event_detail_screen.dart';
 import '../widgets/event_card.dart';
 
-class EventsListScreen extends StatelessWidget {
-  const EventsListScreen({super.key});
+class EventsListScreen extends StatefulWidget {
+  const EventsListScreen({
+    super.key,
+    required this.controller,
+  });
+
+  final EventsController controller;
 
   @override
+  State<EventsListScreen> createState() => _EventsListScreenState();
+}
+
+class _EventsListScreenState extends State<EventsListScreen> {
+  @override
   Widget build(BuildContext context) {
-    final controller = AppScope.of(context).eventsController;
+    final controller = widget.controller;
 
     return AnimatedBuilder(
       animation: controller,
@@ -19,7 +29,13 @@ class EventsListScreen extends StatelessWidget {
         return Scaffold(
           appBar: AppBar(title: const Text('ThrottleMeet')),
           floatingActionButton: FloatingActionButton.extended(
-            onPressed: () => AppRouter.openCreateEvent(context),
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => CreateEventScreen(controller: controller),
+                ),
+              );
+            },
             icon: const Icon(Icons.add),
             label: const Text('Create Event'),
           ),
@@ -44,7 +60,13 @@ class _EventsListBody extends StatelessWidget {
         title: 'No events yet',
         message: 'Create the first event and start building the community.',
         action: FilledButton(
-          onPressed: () => AppRouter.openCreateEvent(context),
+          onPressed: () {
+            Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => CreateEventScreen(controller: controller),
+              ),
+            );
+          },
           child: const Text('Create Event'),
         ),
       );
@@ -59,7 +81,16 @@ class _EventsListBody extends StatelessWidget {
 
         return EventCard(
           event: event,
-          onTap: () => AppRouter.openEventDetail(context, event.id),
+          onTap: () {
+            Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => EventDetailScreen(
+                  controller: controller,
+                  eventId: event.id,
+                ),
+              ),
+            );
+          },
         );
       },
     );
