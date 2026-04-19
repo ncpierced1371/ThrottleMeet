@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'core/theme/app_theme.dart';
-import 'features/events/data/repositories/in_memory_events_repository.dart';
+import 'features/events/data/repositories/supabase_events_repository.dart';
 import 'features/events/presentation/controllers/events_controller.dart';
 import 'features/events/presentation/screens/events_list_screen.dart';
 
@@ -19,7 +19,7 @@ class _ThrottleMeetAppState extends State<ThrottleMeetApp> {
   void initState() {
     super.initState();
     _controller = EventsController(
-      repository: InMemoryEventsRepository(),
+      repository: SupabaseEventsRepository(),
     );
     _controller.loadEvents();
   }
