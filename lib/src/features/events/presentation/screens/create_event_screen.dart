@@ -6,10 +6,7 @@ import '../../domain/entities/rsvp_status.dart';
 import '../controllers/events_controller.dart';
 
 class CreateEventScreen extends StatefulWidget {
-  const CreateEventScreen({
-    super.key,
-    required this.controller,
-  });
+  const CreateEventScreen({super.key, required this.controller});
 
   final EventsController controller;
 
@@ -202,9 +199,23 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
       rsvpStatus: RsvpStatus.going,
     );
 
-    await widget.controller.createNewEvent(event);
+    final succeeded = await widget.controller.createNewEvent(event);
 
     if (!mounted) {
+      return;
+    }
+
+    if (!succeeded) {
+      setState(() {
+        _isSaving = false;
+      });
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            widget.controller.errorMessage ?? 'Unable to create event.',
+          ),
+        ),
+      );
       return;
     }
 

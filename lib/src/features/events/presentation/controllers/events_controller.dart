@@ -5,9 +5,8 @@ import '../../domain/entities/rsvp_status.dart';
 import '../../domain/repositories/events_repository.dart';
 
 class EventsController extends ChangeNotifier {
-  EventsController({
-    required EventsRepository repository,
-  }) : _repository = repository;
+  EventsController({required EventsRepository repository})
+    : _repository = repository;
 
   final EventsRepository _repository;
 
@@ -26,7 +25,8 @@ class EventsController extends ChangeNotifier {
 
     try {
       _events = await _repository.getEvents();
-    } catch (_) {
+    } catch (error) {
+      debugPrint('EventsController.loadEvents error: $error');
       _errorMessage = 'Unable to load events.';
     } finally {
       _isLoading = false;
@@ -42,26 +42,32 @@ class EventsController extends ChangeNotifier {
     }
   }
 
-  Future<void> createNewEvent(Event event) async {
+  Future<bool> createNewEvent(Event event) async {
     try {
       await _repository.createEvent(event);
       await loadEvents();
-    } catch (_) {
+      return true;
+    } catch (error) {
+      debugPrint('EventsController.createNewEvent error: $error');
       _errorMessage = 'Unable to create event.';
       notifyListeners();
+      return false;
     }
   }
 
-  Future<void> updateRsvp({
+  Future<bool> updateRsvp({
     required String eventId,
     required RsvpStatus status,
   }) async {
     try {
       await _repository.updateRsvp(eventId: eventId, status: status);
       await loadEvents();
-    } catch (_) {
+      return true;
+    } catch (error) {
+      debugPrint('EventsController.updateRsvp error: $error');
       _errorMessage = 'Unable to update RSVP.';
       notifyListeners();
+      return false;
     }
   }
 }

@@ -120,15 +120,21 @@ class _EventDetailBody extends StatelessWidget {
     String eventId,
     RsvpStatus status,
   ) async {
-    await controller.updateRsvp(eventId: eventId, status: status);
+    final succeeded = await controller.updateRsvp(
+      eventId: eventId,
+      status: status,
+    );
 
     if (!context.mounted) {
       return;
     }
 
+    final message = succeeded
+        ? 'RSVP updated to ${status.label}.'
+        : controller.errorMessage ?? 'Unable to update RSVP.';
     ScaffoldMessenger.of(
       context,
-    ).showSnackBar(SnackBar(content: Text('RSVP updated to ${status.label}.')));
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 }
 

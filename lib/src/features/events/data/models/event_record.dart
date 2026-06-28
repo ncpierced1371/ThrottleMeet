@@ -31,9 +31,9 @@ class EventRecord {
       description: map['description'] as String,
       locationName: map['location_name'] as String,
       hostName: map['host_name'] as String,
-      startTime: DateTime.parse(map['start_time'] as String),
-      endTime: DateTime.parse(map['end_time'] as String),
-      attendeeCount: map['attendee_count'] as int,
+      startTime: DateTime.parse(map['start_time'].toString()),
+      endTime: DateTime.parse(map['end_time'].toString()),
+      attendeeCount: (map['attendee_count'] as num?)?.toInt() ?? 0,
       rsvpStatus: _rsvpStatusFromString(map['rsvp_status'] as String),
     );
   }

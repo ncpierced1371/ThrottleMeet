@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../domain/entities/event.dart';
@@ -13,15 +14,23 @@ class SupabaseEventsRepository implements EventsRepository {
 
   @override
   Future<void> createEvent(Event event) async {
-    final record = EventRecord.fromEntity(event);
-    await _client.from('events').insert(record.toMap());
+    try {
+      final record = EventRecord.fromEntity(event);
+      await _client.from('events').insert(record.toMap());
+      debugPrint('SupabaseEventsRepository.createEvent success: ${event.id}');
+    } catch (error) {
+      debugPrint('SupabaseEventsRepository.createEvent error: $error');
+      rethrow;
+    }
   }
 
   @override
   Future<Event?> getEventById(String id) async {
     final data = await _client
         .from('events')
-        .select()
+        .select(
+          'id, title, description, location_name, host_name, start_time, end_time, attendee_count, rsvp_status',
+        )
         .eq('id', id)
         .maybeSingle();
 
@@ -34,14 +43,25 @@ class SupabaseEventsRepository implements EventsRepository {
 
   @override
   Future<List<Event>> getEvents() async {
-    final data = await _client
-        .from('events')
-        .select()
-        .order('start_time');
+    try {
+      final data = await _client
+          .from('events')
+          .select(
+            'id, title, description, location_name, host_name, start_time, end_time, attendee_count, rsvp_status',
+          )
+          .order('start_time');
 
-    return data
-        .map<Event>((item) => EventRecord.fromMap(item).toEntity())
-        .toList();
+      debugPrint(
+        'SupabaseEventsRepository.getEvents rows returned: ${data.length}',
+      );
+
+      return data
+          .map<Event>((item) => EventRecord.fromMap(item).toEntity())
+          .toList();
+    } catch (error) {
+      debugPrint('SupabaseEventsRepository.getEvents error: $error');
+      rethrow;
+    }
   }
 
   @override
@@ -51,7 +71,9 @@ class SupabaseEventsRepository implements EventsRepository {
   }) async {
     await _client
         .from('events')
-        .update({'rsvp_status': status.name})
+        .update({
+          'rsvp_status': status.name,
+        })
         .eq('id', eventId);
   }
 }
