@@ -47,6 +47,7 @@ class _EventDetailBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final viewerRsvpStatus = event.viewerRsvpStatus;
 
     return ListView(
       padding: const EdgeInsets.all(16),
@@ -98,11 +99,13 @@ class _EventDetailBody extends StatelessWidget {
                 Text('RSVP', style: theme.textTheme.titleLarge),
                 const SizedBox(height: 8),
                 Text(
-                  'Your current status is ${event.viewerRsvpStatus!.label.toLowerCase()}.',
+                  viewerRsvpStatus == null
+                      ? 'You have not responded yet.'
+                      : 'Your current status is ${viewerRsvpStatus.label.toLowerCase()}.',
                 ),
                 const SizedBox(height: 16),
                 RsvpSelector(
-                  selected: event.viewerRsvpStatus!,
+                  selected: viewerRsvpStatus,
                   onSelected: (status) =>
                       _updateRsvp(context, controller, event.id, status),
                 ),

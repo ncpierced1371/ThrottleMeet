@@ -31,10 +31,11 @@ class SupabaseEventsRepository implements EventsRepository {
 
   @override
   Future<Event?> getEventById(String id) async {
+    final participantId = await _participantIdStore.getOrCreateParticipantId();
     final data = await _client
-        .from('events')
-        .select(
-          'id, title, description, location_name, host_name, start_time, end_time, attendee_count, rsvp_status',
+        .rpc(
+          'get_events_for_participant',
+          params: {'participant_id': participantId},
         )
         .eq('id', id)
         .maybeSingle();
@@ -49,12 +50,14 @@ class SupabaseEventsRepository implements EventsRepository {
   @override
   Future<List<Event>> getEvents() async {
     try {
+      final participantId = await _participantIdStore
+          .getOrCreateParticipantId();
       final data = await _client
-          .from('events')
-          .select(
-            'id, title, description, location_name, host_name, start_time, end_time, attendee_count, rsvp_status',
+          .rpc(
+            'get_events_for_participant',
+            params: {'participant_id': participantId},
           )
-          .order('start_time');
+          .select();
 
       debugPrint(
         'SupabaseEventsRepository.getEvents rows returned: ${data.length}',
@@ -74,10 +77,20 @@ class SupabaseEventsRepository implements EventsRepository {
     required String eventId,
     required RsvpStatus status,
   }) async {
-    await _participantIdStore.getOrCreateParticipantId();
-    await _client
-        .from('events')
-        .update({'rsvp_status': status.name})
-        .eq('id', eventId);
+    final participantId = await _participantIdStore.getOrCreateParticipantId();
+    final savedStatus = await _client.rpc<String>(
+      'set_event_rsvp',
+      params: {
+        'event_id': eventId,
+        'participant_id': participantId,
+        'status': status.name,
+      },
+    );
+
+    if (savedStatus != status.name) {
+      throw StateError(
+        'RSVP update returned "$savedStatus" instead of "${status.name}".',
+      );
+    }
   }
 }

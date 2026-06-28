@@ -9,7 +9,7 @@ class RsvpSelector extends StatelessWidget {
     required this.onSelected,
   });
 
-  final RsvpStatus selected;
+  final RsvpStatus? selected;
   final ValueChanged<RsvpStatus> onSelected;
 
   @override
