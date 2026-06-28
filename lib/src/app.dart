@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'core/identity/participant_id_store.dart';
 import 'core/theme/app_theme.dart';
 import 'features/events/data/repositories/supabase_events_repository.dart';
 import 'features/events/presentation/controllers/events_controller.dart';
@@ -19,7 +20,9 @@ class _ThrottleMeetAppState extends State<ThrottleMeetApp> {
   void initState() {
     super.initState();
     _controller = EventsController(
-      repository: SupabaseEventsRepository(),
+      repository: SupabaseEventsRepository(
+        participantIdStore: ParticipantIdStore(),
+      ),
     );
     _controller.loadEvents();
   }

@@ -1,15 +1,20 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../../core/identity/participant_id_store.dart';
 import '../../domain/entities/event.dart';
 import '../../domain/entities/rsvp_status.dart';
 import '../../domain/repositories/events_repository.dart';
 import '../models/event_record.dart';
 
 class SupabaseEventsRepository implements EventsRepository {
-  SupabaseEventsRepository({SupabaseClient? client})
-    : _client = client ?? Supabase.instance.client;
+  SupabaseEventsRepository({
+    required ParticipantIdStore participantIdStore,
+    SupabaseClient? client,
+  }) : _participantIdStore = participantIdStore,
+       _client = client ?? Supabase.instance.client;
 
+  final ParticipantIdStore _participantIdStore;
   final SupabaseClient _client;
 
   @override
@@ -69,11 +74,10 @@ class SupabaseEventsRepository implements EventsRepository {
     required String eventId,
     required RsvpStatus status,
   }) async {
+    await _participantIdStore.getOrCreateParticipantId();
     await _client
         .from('events')
-        .update({
-          'rsvp_status': status.name,
-        })
+        .update({'rsvp_status': status.name})
         .eq('id', eventId);
   }
 }
