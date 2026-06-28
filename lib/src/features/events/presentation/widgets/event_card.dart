@@ -41,7 +41,7 @@ class EventCard extends StatelessWidget {
                       ],
                     ),
                   ),
-                  Chip(label: Text(event.rsvpStatus.label)),
+                  Chip(label: Text(event.viewerRsvpStatus!.label)),
                 ],
               ),
               const SizedBox(height: 16),

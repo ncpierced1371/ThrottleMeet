@@ -98,11 +98,11 @@ class _EventDetailBody extends StatelessWidget {
                 Text('RSVP', style: theme.textTheme.titleLarge),
                 const SizedBox(height: 8),
                 Text(
-                  'Your current status is ${event.rsvpStatus.label.toLowerCase()}.',
+                  'Your current status is ${event.viewerRsvpStatus!.label.toLowerCase()}.',
                 ),
                 const SizedBox(height: 16),
                 RsvpSelector(
-                  selected: event.rsvpStatus,
+                  selected: event.viewerRsvpStatus!,
                   onSelected: (status) =>
                       _updateRsvp(context, controller, event.id, status),
                 ),

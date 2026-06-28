@@ -1,5 +1,7 @@
 import 'rsvp_status.dart';
 
+const _unsetViewerRsvpStatus = Object();
+
 class Event {
   const Event({
     required this.id,
@@ -10,7 +12,7 @@ class Event {
     required this.startTime,
     required this.endTime,
     required this.attendeeCount,
-    required this.rsvpStatus,
+    required this.viewerRsvpStatus,
   });
 
   final String id;
@@ -21,7 +23,7 @@ class Event {
   final DateTime startTime;
   final DateTime endTime;
   final int attendeeCount;
-  final RsvpStatus rsvpStatus;
+  final RsvpStatus? viewerRsvpStatus;
 
   Event copyWith({
     String? id,
@@ -32,7 +34,7 @@ class Event {
     DateTime? startTime,
     DateTime? endTime,
     int? attendeeCount,
-    RsvpStatus? rsvpStatus,
+    Object? viewerRsvpStatus = _unsetViewerRsvpStatus,
   }) {
     return Event(
       id: id ?? this.id,
@@ -43,7 +45,9 @@ class Event {
       startTime: startTime ?? this.startTime,
       endTime: endTime ?? this.endTime,
       attendeeCount: attendeeCount ?? this.attendeeCount,
-      rsvpStatus: rsvpStatus ?? this.rsvpStatus,
+      viewerRsvpStatus: identical(viewerRsvpStatus, _unsetViewerRsvpStatus)
+          ? this.viewerRsvpStatus
+          : viewerRsvpStatus as RsvpStatus?,
     );
   }
 }

@@ -196,7 +196,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
       startTime: startTime,
       endTime: endTime,
       attendeeCount: 0,
-      rsvpStatus: RsvpStatus.going,
+      viewerRsvpStatus: RsvpStatus.going,
     );
 
     final succeeded = await widget.controller.createNewEvent(event);

@@ -40,6 +40,6 @@ class InMemoryEventsRepository implements EventsRepository {
       return;
     }
 
-    _events[index] = _events[index].copyWith(rsvpStatus: status);
+    _events[index] = _events[index].copyWith(viewerRsvpStatus: status);
   }
 }

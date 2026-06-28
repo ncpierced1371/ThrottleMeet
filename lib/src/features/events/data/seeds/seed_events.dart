@@ -14,7 +14,7 @@ class SeedEvents {
         startTime: DateTime(2026, 5, 2, 9, 30),
         endTime: DateTime(2026, 5, 2, 11, 30),
         attendeeCount: 18,
-        rsvpStatus: RsvpStatus.going,
+        viewerRsvpStatus: RsvpStatus.going,
       ),
       Event(
         id: 'sunset-downtown-meet',
@@ -26,7 +26,7 @@ class SeedEvents {
         startTime: DateTime(2026, 5, 7, 18, 0),
         endTime: DateTime(2026, 5, 7, 20, 0),
         attendeeCount: 26,
-        rsvpStatus: RsvpStatus.interested,
+        viewerRsvpStatus: RsvpStatus.interested,
       ),
       Event(
         id: 'early-bird-cars-coffee',
@@ -38,7 +38,7 @@ class SeedEvents {
         startTime: DateTime(2026, 5, 16, 8, 0),
         endTime: DateTime(2026, 5, 16, 10, 0),
         attendeeCount: 12,
-        rsvpStatus: RsvpStatus.notGoing,
+        viewerRsvpStatus: RsvpStatus.notGoing,
       ),
     ];
   }

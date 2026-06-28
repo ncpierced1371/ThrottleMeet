@@ -11,7 +11,7 @@ class EventRecord {
     required this.startTime,
     required this.endTime,
     required this.attendeeCount,
-    required this.rsvpStatus,
+    required this.viewerRsvpStatus,
   });
 
   final String id;
@@ -22,7 +22,7 @@ class EventRecord {
   final DateTime startTime;
   final DateTime endTime;
   final int attendeeCount;
-  final RsvpStatus rsvpStatus;
+  final RsvpStatus? viewerRsvpStatus;
 
   factory EventRecord.fromMap(Map<String, dynamic> map) {
     return EventRecord(
@@ -34,7 +34,7 @@ class EventRecord {
       startTime: DateTime.parse(map['start_time'].toString()),
       endTime: DateTime.parse(map['end_time'].toString()),
       attendeeCount: (map['attendee_count'] as num?)?.toInt() ?? 0,
-      rsvpStatus: _rsvpStatusFromString(map['rsvp_status'] as String),
+      viewerRsvpStatus: _rsvpStatusFromValue(map['rsvp_status']),
     );
   }
 
@@ -48,7 +48,7 @@ class EventRecord {
       startTime: event.startTime,
       endTime: event.endTime,
       attendeeCount: event.attendeeCount,
-      rsvpStatus: event.rsvpStatus,
+      viewerRsvpStatus: event.viewerRsvpStatus,
     );
   }
 
@@ -62,7 +62,7 @@ class EventRecord {
       startTime: startTime,
       endTime: endTime,
       attendeeCount: attendeeCount,
-      rsvpStatus: rsvpStatus,
+      viewerRsvpStatus: viewerRsvpStatus,
     );
   }
 
@@ -76,8 +76,16 @@ class EventRecord {
       'start_time': startTime.toIso8601String(),
       'end_time': endTime.toIso8601String(),
       'attendee_count': attendeeCount,
-      'rsvp_status': rsvpStatus.name,
+      'rsvp_status': viewerRsvpStatus?.name,
     };
+  }
+
+  static RsvpStatus? _rsvpStatusFromValue(Object? value) {
+    if (value == null) {
+      return null;
+    }
+
+    return _rsvpStatusFromString(value as String);
   }
 
   static RsvpStatus _rsvpStatusFromString(String value) {
