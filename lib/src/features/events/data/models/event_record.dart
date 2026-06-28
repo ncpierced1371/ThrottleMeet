@@ -31,8 +31,8 @@ class EventRecord {
       description: map['description'] as String,
       locationName: map['location_name'] as String,
       hostName: map['host_name'] as String,
-      startTime: DateTime.parse(map['start_time'].toString()),
-      endTime: DateTime.parse(map['end_time'].toString()),
+      startTime: _parseTimestamp(map, 'start_time'),
+      endTime: _parseTimestamp(map, 'end_time'),
       attendeeCount: (map['attendee_count'] as num?)?.toInt() ?? 0,
       viewerRsvpStatus: _rsvpStatusFromValue(map['rsvp_status']),
     );
@@ -66,18 +66,37 @@ class EventRecord {
     );
   }
 
-  Map<String, dynamic> toMap() {
+  Map<String, dynamic> toCreateMap() {
     return {
       'id': id,
       'title': title,
       'description': description,
       'location_name': locationName,
       'host_name': hostName,
-      'start_time': startTime.toIso8601String(),
-      'end_time': endTime.toIso8601String(),
-      'attendee_count': attendeeCount,
-      'rsvp_status': viewerRsvpStatus?.name,
+      'start_time': startTime.toUtc().toIso8601String(),
+      'end_time': endTime.toUtc().toIso8601String(),
     };
+  }
+
+  static DateTime _parseTimestamp(Map<String, dynamic> map, String fieldName) {
+    final value = map[fieldName];
+
+    if (value is DateTime) {
+      return value.toUtc();
+    }
+
+    if (value is! String || value.isEmpty) {
+      throw FormatException(
+        'Expected a timestamp string for "$fieldName", got: $value',
+      );
+    }
+
+    final timestamp = DateTime.tryParse(value);
+    if (timestamp == null) {
+      throw FormatException('Invalid timestamp for "$fieldName": $value');
+    }
+
+    return timestamp.toUtc();
   }
 
   static RsvpStatus? _rsvpStatusFromValue(Object? value) {

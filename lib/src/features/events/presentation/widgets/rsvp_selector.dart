@@ -10,7 +10,7 @@ class RsvpSelector extends StatelessWidget {
   });
 
   final RsvpStatus? selected;
-  final ValueChanged<RsvpStatus> onSelected;
+  final ValueChanged<RsvpStatus>? onSelected;
 
   @override
   Widget build(BuildContext context) {
@@ -23,7 +23,7 @@ class RsvpSelector extends StatelessWidget {
         return ChoiceChip(
           label: Text(status.label),
           selected: isSelected,
-          onSelected: (_) => onSelected(status),
+          onSelected: onSelected == null ? null : (_) => onSelected!(status),
         );
       }).toList(),
     );

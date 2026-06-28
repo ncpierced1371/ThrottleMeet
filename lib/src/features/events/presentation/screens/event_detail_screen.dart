@@ -38,15 +38,23 @@ class EventDetailScreen extends StatelessWidget {
   }
 }
 
-class _EventDetailBody extends StatelessWidget {
+class _EventDetailBody extends StatefulWidget {
   const _EventDetailBody({required this.event, required this.controller});
 
   final Event event;
   final EventsController controller;
 
   @override
+  State<_EventDetailBody> createState() => _EventDetailBodyState();
+}
+
+class _EventDetailBodyState extends State<_EventDetailBody> {
+  bool _isUpdatingRsvp = false;
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final event = widget.event;
     final viewerRsvpStatus = event.viewerRsvpStatus;
 
     return ListView(
@@ -106,8 +114,7 @@ class _EventDetailBody extends StatelessWidget {
                 const SizedBox(height: 16),
                 RsvpSelector(
                   selected: viewerRsvpStatus,
-                  onSelected: (status) =>
-                      _updateRsvp(context, controller, event.id, status),
+                  onSelected: _isUpdatingRsvp ? null : _updateRsvp,
                 ),
               ],
             ),
@@ -117,24 +124,31 @@ class _EventDetailBody extends StatelessWidget {
     );
   }
 
-  Future<void> _updateRsvp(
-    BuildContext context,
-    EventsController controller,
-    String eventId,
-    RsvpStatus status,
-  ) async {
-    final succeeded = await controller.updateRsvp(
-      eventId: eventId,
-      status: status,
-    );
-
-    if (!context.mounted) {
+  Future<void> _updateRsvp(RsvpStatus status) async {
+    if (_isUpdatingRsvp) {
       return;
     }
 
+    setState(() {
+      _isUpdatingRsvp = true;
+    });
+
+    final succeeded = await widget.controller.updateRsvp(
+      eventId: widget.event.id,
+      status: status,
+    );
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _isUpdatingRsvp = false;
+    });
+
     final message = succeeded
         ? 'RSVP updated to ${status.label}.'
-        : controller.errorMessage ?? 'Unable to update RSVP.';
+        : widget.controller.errorMessage ?? 'Unable to update RSVP.';
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text(message)));

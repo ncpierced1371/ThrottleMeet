@@ -21,7 +21,7 @@ class SupabaseEventsRepository implements EventsRepository {
   Future<void> createEvent(Event event) async {
     try {
       final record = EventRecord.fromEntity(event);
-      await _client.from('events').insert(record.toMap());
+      await _client.from('events').insert(record.toCreateMap());
       debugPrint('SupabaseEventsRepository.createEvent success: ${event.id}');
     } catch (error) {
       debugPrint('SupabaseEventsRepository.createEvent error: $error');

@@ -163,6 +163,10 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
   }
 
   Future<void> _submit() async {
+    if (_isSaving) {
+      return;
+    }
+
     if (!_formKey.currentState!.validate()) {
       return;
     }
