@@ -18,16 +18,18 @@ class EventsController extends ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
 
-  Future<void> loadEvents() async {
+  Future<bool> loadEvents() async {
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
 
     try {
       _events = await _repository.getEvents();
+      return true;
     } catch (error) {
       debugPrint('EventsController.loadEvents error: $error');
       _errorMessage = 'Unable to load events.';
+      return false;
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -45,14 +47,14 @@ class EventsController extends ChangeNotifier {
   Future<bool> createNewEvent(Event event) async {
     try {
       await _repository.createEvent(event);
-      await loadEvents();
-      return true;
     } catch (error) {
       debugPrint('EventsController.createNewEvent error: $error');
       _errorMessage = 'Unable to create event.';
       notifyListeners();
       return false;
     }
+
+    return loadEvents();
   }
 
   Future<bool> updateRsvp({
@@ -61,13 +63,13 @@ class EventsController extends ChangeNotifier {
   }) async {
     try {
       await _repository.updateRsvp(eventId: eventId, status: status);
-      await loadEvents();
-      return true;
     } catch (error) {
       debugPrint('EventsController.updateRsvp error: $error');
       _errorMessage = 'Unable to update RSVP.';
       notifyListeners();
       return false;
     }
+
+    return loadEvents();
   }
 }

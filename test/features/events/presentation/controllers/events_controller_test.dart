@@ -55,6 +55,27 @@ void main() {
       expect(repository.loadCallCount, 1);
     });
 
+    test(
+      'createNewEvent returns false and preserves events when refresh fails',
+      () async {
+        final repository = _FakeEventsRepository(events: [_existingEvent]);
+        final controller = EventsController(repository: repository);
+        addTearDown(controller.dispose);
+        await controller.loadEvents();
+        final successfulEvents = controller.events;
+        repository.loadError = _failure;
+
+        final succeeded = await controller.createNewEvent(_newEvent);
+
+        expect(succeeded, isFalse);
+        expect(controller.errorMessage, 'Unable to load events.');
+        expect(controller.isLoading, isFalse);
+        expect(controller.events, same(successfulEvents));
+        expect(controller.events, [_existingEvent]);
+        expect(repository.loadCallCount, 2);
+      },
+    );
+
     test('updateRsvp failure preserves successful state', () async {
       final repository = _FakeEventsRepository(events: [_existingEvent]);
       final controller = EventsController(repository: repository);
@@ -74,6 +95,73 @@ void main() {
       expect(controller.events, same(successfulEvents));
       expect(controller.events.single.viewerRsvpStatus, RsvpStatus.interested);
       expect(repository.loadCallCount, 1);
+    });
+
+    test(
+      'updateRsvp returns false and preserves events when refresh fails',
+      () async {
+        final repository = _FakeEventsRepository(events: [_existingEvent]);
+        final controller = EventsController(repository: repository);
+        addTearDown(controller.dispose);
+        await controller.loadEvents();
+        final successfulEvents = controller.events;
+        repository.loadError = _failure;
+
+        final succeeded = await controller.updateRsvp(
+          eventId: _existingEvent.id,
+          status: RsvpStatus.going,
+        );
+
+        expect(succeeded, isFalse);
+        expect(controller.errorMessage, 'Unable to load events.');
+        expect(controller.isLoading, isFalse);
+        expect(controller.events, same(successfulEvents));
+        expect(
+          controller.events.single.viewerRsvpStatus,
+          RsvpStatus.interested,
+        );
+        expect(repository.loadCallCount, 2);
+      },
+    );
+
+    test(
+      'successful create and refresh clear a prior mutation error',
+      () async {
+        final repository = _FakeEventsRepository(events: [_existingEvent])
+          ..createError = _failure;
+        final controller = EventsController(repository: repository);
+        addTearDown(controller.dispose);
+        await controller.loadEvents();
+        await controller.createNewEvent(_newEvent);
+        repository.createError = null;
+
+        final succeeded = await controller.createNewEvent(_newEvent);
+
+        expect(succeeded, isTrue);
+        expect(controller.errorMessage, isNull);
+        expect(controller.events, [_existingEvent, _newEvent]);
+      },
+    );
+
+    test('successful RSVP and refresh clear a prior mutation error', () async {
+      final repository = _FakeEventsRepository(events: [_existingEvent])
+        ..updateError = _failure;
+      final controller = EventsController(repository: repository);
+      addTearDown(controller.dispose);
+      await controller.loadEvents();
+      await controller.updateRsvp(
+        eventId: _existingEvent.id,
+        status: RsvpStatus.going,
+      );
+      repository.updateError = null;
+
+      final succeeded = await controller.updateRsvp(
+        eventId: _existingEvent.id,
+        status: RsvpStatus.going,
+      );
+
+      expect(succeeded, isTrue);
+      expect(controller.errorMessage, isNull);
     });
   });
 }
