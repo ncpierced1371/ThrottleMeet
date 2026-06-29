@@ -12,39 +12,39 @@ void main() {
     SharedPreferences.setMockInitialValues({});
   });
 
-  test('snapshots are participant-specific', () async {
+  test('snapshots are authenticated-user-specific', () async {
     final cache = SharedPreferencesEventSnapshotCache();
-    final participantACachedAt = DateTime.utc(2026, 6, 28, 12);
-    final participantBCachedAt = DateTime.utc(2026, 6, 28, 13);
+    final userACachedAt = DateTime.utc(2026, 6, 28, 12);
+    final userBCachedAt = DateTime.utc(2026, 6, 28, 13);
 
     await cache.write(
-      'participant-a',
+      'user-a',
       EventSnapshot(
         events: [_event(id: 'event-a', viewerRsvpStatus: RsvpStatus.going)],
-        cachedAt: participantACachedAt,
+        cachedAt: userACachedAt,
       ),
     );
     await cache.write(
-      'participant-b',
+      'user-b',
       EventSnapshot(
         events: [
           _event(id: 'event-b', viewerRsvpStatus: RsvpStatus.interested),
         ],
-        cachedAt: participantBCachedAt,
+        cachedAt: userBCachedAt,
       ),
     );
 
-    final participantA = await cache.read('participant-a');
-    final participantB = await cache.read('participant-b');
-    final participantC = await cache.read('participant-c');
+    final userA = await cache.read('user-a');
+    final userB = await cache.read('user-b');
+    final userC = await cache.read('user-c');
 
-    expect(participantA?.events.single.id, 'event-a');
-    expect(participantA?.events.single.viewerRsvpStatus, RsvpStatus.going);
-    expect(participantA?.cachedAt, participantACachedAt);
-    expect(participantB?.events.single.id, 'event-b');
-    expect(participantB?.events.single.viewerRsvpStatus, RsvpStatus.interested);
-    expect(participantB?.cachedAt, participantBCachedAt);
-    expect(participantC, isNull);
+    expect(userA?.events.single.id, 'event-a');
+    expect(userA?.events.single.viewerRsvpStatus, RsvpStatus.going);
+    expect(userA?.cachedAt, userACachedAt);
+    expect(userB?.events.single.id, 'event-b');
+    expect(userB?.events.single.viewerRsvpStatus, RsvpStatus.interested);
+    expect(userB?.cachedAt, userBCachedAt);
+    expect(userC, isNull);
   });
 
   test('nullable RSVP status and attendee count round-trip', () async {
@@ -57,14 +57,23 @@ void main() {
     );
 
     await cache.write(
-      'participant-a',
+      'user-a',
       EventSnapshot(events: [event], cachedAt: cachedAt),
     );
-    final snapshot = await cache.read('participant-a');
+    final snapshot = await cache.read('user-a');
 
     expect(snapshot?.events.single.viewerRsvpStatus, isNull);
     expect(snapshot?.events.single.attendeeCount, 9);
     expect(snapshot?.cachedAt, cachedAt.toUtc());
+  });
+
+  test('does not reuse a legacy participant-keyed snapshot', () async {
+    SharedPreferences.setMockInitialValues({
+      'participant_event_snapshot_v1:user-a': '{"legacy":true}',
+    });
+    final cache = SharedPreferencesEventSnapshotCache();
+
+    expect(await cache.read('user-a'), isNull);
   });
 }
 

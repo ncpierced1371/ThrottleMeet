@@ -1,7 +1,9 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../../../../core/identity/participant_id_store.dart';
+import '../../../../core/errors/app_exception.dart';
+import '../../../auth/data/supabase_auth_gateway.dart';
+import '../../../auth/domain/repositories/auth_session_provider.dart';
 import '../../domain/entities/event.dart';
 import '../../domain/entities/event_snapshot.dart';
 import '../../domain/entities/rsvp_status.dart';
@@ -12,22 +14,25 @@ import 'supabase_error_mapper.dart';
 
 class SupabaseEventsRepository implements EventsRepository {
   SupabaseEventsRepository({
-    required ParticipantIdStore participantIdStore,
     SupabaseClient? client,
+    AuthSessionProvider? authSessionProvider,
     EventSnapshotCache? eventSnapshotCache,
     Duration requestTimeout = const Duration(seconds: 15),
     DateTime Function()? now,
-  }) : _participantIdStore = participantIdStore,
-       _client = client ?? Supabase.instance.client,
-       _eventSnapshotCache = eventSnapshotCache,
-       _now = now ?? DateTime.now,
-       _requestTimeout = requestTimeout;
+  }) {
+    _client = client ?? Supabase.instance.client;
+    _authSessionProvider =
+        authSessionProvider ?? SupabaseAuthGateway(client: _client);
+    _eventSnapshotCache = eventSnapshotCache;
+    _now = now ?? DateTime.now;
+    _requestTimeout = requestTimeout;
+  }
 
-  final ParticipantIdStore _participantIdStore;
-  final SupabaseClient _client;
-  final EventSnapshotCache? _eventSnapshotCache;
-  final DateTime Function() _now;
-  final Duration _requestTimeout;
+  late final SupabaseClient _client;
+  late final AuthSessionProvider _authSessionProvider;
+  late final EventSnapshotCache? _eventSnapshotCache;
+  late final DateTime Function() _now;
+  late final Duration _requestTimeout;
 
   @override
   Future<EventSnapshot?> getCachedEvents() async {
@@ -36,8 +41,8 @@ class SupabaseEventsRepository implements EventsRepository {
       return null;
     }
 
-    final participantId = await _participantIdStore.getOrCreateParticipantId();
-    return cache.read(participantId);
+    final userId = _requireAuthenticatedUserId();
+    return cache.read(userId);
   }
 
   @override
@@ -48,10 +53,9 @@ class SupabaseEventsRepository implements EventsRepository {
     }
 
     try {
-      final participantId = await _participantIdStore
-          .getOrCreateParticipantId();
+      final userId = _requireAuthenticatedUserId();
       await cache.write(
-        participantId,
+        userId,
         EventSnapshot(events: events, cachedAt: _now().toUtc()),
       );
     } catch (error) {
@@ -62,12 +66,11 @@ class SupabaseEventsRepository implements EventsRepository {
   @override
   Future<void> createEvent(Event event) {
     return _execute('createEvent', () async {
-      final participantId = await _participantIdStore
-          .getOrCreateParticipantId();
+      _requireAuthenticatedUserId();
       final record = EventRecord.fromEntity(event);
       final createValues = record.toCreateMap();
       final confirmation = await _client.rpc<Map<String, dynamic>>(
-        'create_event_with_creator_rsvp',
+        'create_event_with_creator_rsvp_v2',
         params: {
           'event_id': createValues['id'],
           'title': createValues['title'],
@@ -76,7 +79,6 @@ class SupabaseEventsRepository implements EventsRepository {
           'host_name': createValues['host_name'],
           'start_time': createValues['start_time'],
           'end_time': createValues['end_time'],
-          'participant_id': participantId,
         },
       );
 
@@ -97,13 +99,9 @@ class SupabaseEventsRepository implements EventsRepository {
   @override
   Future<Event?> getEventById(String id) {
     return _execute('getEventById', () async {
-      final participantId = await _participantIdStore
-          .getOrCreateParticipantId();
+      _requireAuthenticatedUserId();
       final data = await _client
-          .rpc(
-            'get_events_for_participant',
-            params: {'participant_id': participantId},
-          )
+          .rpc('get_events_for_current_user')
           .eq('id', id)
           .maybeSingle();
 
@@ -118,14 +116,8 @@ class SupabaseEventsRepository implements EventsRepository {
   @override
   Future<List<Event>> getEvents() {
     return _execute('getEvents', () async {
-      final participantId = await _participantIdStore
-          .getOrCreateParticipantId();
-      final data = await _client
-          .rpc(
-            'get_events_for_participant',
-            params: {'participant_id': participantId},
-          )
-          .select();
+      _requireAuthenticatedUserId();
+      final data = await _client.rpc('get_events_for_current_user').select();
 
       debugPrint(
         'SupabaseEventsRepository.getEvents rows returned: ${data.length}',
@@ -144,15 +136,10 @@ class SupabaseEventsRepository implements EventsRepository {
     required RsvpStatus status,
   }) {
     return _execute('updateRsvp', () async {
-      final participantId = await _participantIdStore
-          .getOrCreateParticipantId();
+      _requireAuthenticatedUserId();
       final savedStatus = await _client.rpc<String>(
-        'set_event_rsvp',
-        params: {
-          'event_id': eventId,
-          'participant_id': participantId,
-          'status': status.name,
-        },
+        'set_event_rsvp_v2',
+        params: {'event_id': eventId, 'status': status.name},
       );
 
       if (savedStatus != status.name) {
@@ -161,6 +148,17 @@ class SupabaseEventsRepository implements EventsRepository {
         );
       }
     });
+  }
+
+  String _requireAuthenticatedUserId() {
+    final userId = _authSessionProvider.currentUserId;
+    if (userId == null || userId.isEmpty) {
+      throw AppException(
+        type: AppErrorType.authorization,
+        cause: StateError('An active authenticated Supabase user is required.'),
+      );
+    }
+    return userId;
   }
 
   Future<T> _execute<T>(

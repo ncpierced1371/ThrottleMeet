@@ -9,9 +9,9 @@ import '../models/event_record.dart';
 typedef SharedPreferencesLoader = Future<SharedPreferences> Function();
 
 abstract class EventSnapshotCache {
-  Future<EventSnapshot?> read(String participantId);
+  Future<EventSnapshot?> read(String userId);
 
-  Future<void> write(String participantId, EventSnapshot snapshot);
+  Future<void> write(String userId, EventSnapshot snapshot);
 }
 
 class SharedPreferencesEventSnapshotCache implements EventSnapshotCache {
@@ -19,14 +19,14 @@ class SharedPreferencesEventSnapshotCache implements EventSnapshotCache {
     SharedPreferencesLoader? loadPreferences,
   }) : _loadPreferences = loadPreferences ?? SharedPreferences.getInstance;
 
-  static const _keyPrefix = 'participant_event_snapshot_v1';
+  static const _keyPrefix = 'authenticated_event_snapshot_v1';
 
   final SharedPreferencesLoader _loadPreferences;
 
   @override
-  Future<EventSnapshot?> read(String participantId) async {
+  Future<EventSnapshot?> read(String userId) async {
     final preferences = await _loadPreferences();
-    final key = _keyFor(participantId);
+    final key = _keyFor(userId);
     final encodedSnapshot = preferences.getString(key);
     if (encodedSnapshot == null) {
       return null;
@@ -65,7 +65,7 @@ class SharedPreferencesEventSnapshotCache implements EventSnapshotCache {
   }
 
   @override
-  Future<void> write(String participantId, EventSnapshot snapshot) async {
+  Future<void> write(String userId, EventSnapshot snapshot) async {
     final preferences = await _loadPreferences();
     final encodedSnapshot = jsonEncode({
       'cached_at': snapshot.cachedAt.toUtc().toIso8601String(),
@@ -74,13 +74,13 @@ class SharedPreferencesEventSnapshotCache implements EventSnapshotCache {
           .toList(),
     });
     final didPersist = await preferences.setString(
-      _keyFor(participantId),
+      _keyFor(userId),
       encodedSnapshot,
     );
     if (!didPersist) {
-      throw StateError('Unable to persist participant event snapshot.');
+      throw StateError('Unable to persist authenticated event snapshot.');
     }
   }
 
-  String _keyFor(String participantId) => '$_keyPrefix:$participantId';
+  String _keyFor(String userId) => '$_keyPrefix:$userId';
 }

@@ -7,7 +7,7 @@ import 'package:http/http.dart';
 import 'package:http/testing.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:throttlemeet_v2/src/core/errors/app_exception.dart';
-import 'package:throttlemeet_v2/src/core/identity/participant_id_store.dart';
+import 'package:throttlemeet_v2/src/features/auth/domain/repositories/auth_session_provider.dart';
 import 'package:throttlemeet_v2/src/features/events/data/cache/event_snapshot_cache.dart';
 import 'package:throttlemeet_v2/src/features/events/data/repositories/supabase_events_repository.dart';
 import 'package:throttlemeet_v2/src/features/events/domain/entities/event.dart';
@@ -15,13 +15,12 @@ import 'package:throttlemeet_v2/src/features/events/domain/entities/event_snapsh
 import 'package:throttlemeet_v2/src/features/events/domain/entities/rsvp_status.dart';
 
 void main() {
-  const participantId = 'participant-123';
+  const userId = 'authenticated-user-123';
 
   group('SupabaseEventsRepository', () {
     test('createEvent atomically creates the event and creator RSVP', () async {
       late Request request;
       final event = _event(id: 'new-event');
-      final store = _TrackingParticipantIdStore(participantId);
       final client = _clientWith((receivedRequest) async {
         request = receivedRequest;
         return _jsonResponse(receivedRequest, {
@@ -32,14 +31,17 @@ void main() {
       });
       addTearDown(client.dispose);
       final repository = SupabaseEventsRepository(
-        participantIdStore: store,
+        authSessionProvider: const _FakeAuthSessionProvider(userId),
         client: client,
       );
 
       await repository.createEvent(event);
 
       expect(request.method, 'POST');
-      expect(request.url.path, '/rest/v1/rpc/create_event_with_creator_rsvp');
+      expect(
+        request.url.path,
+        '/rest/v1/rpc/create_event_with_creator_rsvp_v2',
+      );
       expect(jsonDecode(request.body), {
         'event_id': 'new-event',
         'title': 'Test Meet',
@@ -48,14 +50,13 @@ void main() {
         'host_name': 'Test Host',
         'start_time': '2026-07-01T18:00:00.000Z',
         'end_time': '2026-07-01T20:00:00.000Z',
-        'participant_id': participantId,
       });
-      expect(store.requestCount, 1);
+      expect(request.body, isNot(contains('participant_id')));
+      expect(request.body, isNot(contains('user_id')));
     });
 
     test('createEvent rejects a mismatched RPC confirmation', () async {
       final event = _event(id: 'new-event');
-      final store = _TrackingParticipantIdStore(participantId);
       final client = _clientWith(
         (request) async => _jsonResponse(request, {
           'id': event.id,
@@ -65,7 +66,7 @@ void main() {
       );
       addTearDown(client.dispose);
       final repository = SupabaseEventsRepository(
-        participantIdStore: store,
+        authSessionProvider: const _FakeAuthSessionProvider(userId),
         client: client,
       );
 
@@ -76,10 +77,9 @@ void main() {
     });
 
     test(
-      'getEvents requests the participant RPC and maps attendee and RSVP data',
+      'getEvents requests the current-user RPC and maps attendee and RSVP data',
       () async {
         late Request request;
-        final store = _TrackingParticipantIdStore(participantId);
         final client = _clientWith((receivedRequest) async {
           request = receivedRequest;
           return _jsonResponse(receivedRequest, [
@@ -89,16 +89,17 @@ void main() {
         });
         addTearDown(client.dispose);
         final repository = SupabaseEventsRepository(
-          participantIdStore: store,
+          authSessionProvider: const _FakeAuthSessionProvider(userId),
           client: client,
         );
 
         final events = await repository.getEvents();
 
         expect(request.method, 'POST');
-        expect(request.url.path, '/rest/v1/rpc/get_events_for_participant');
-        expect(jsonDecode(request.body), {'participant_id': participantId});
-        expect(store.requestCount, 1);
+        expect(request.url.path, '/rest/v1/rpc/get_events_for_current_user');
+        expect(jsonDecode(request.body), isNull);
+        expect(request.body, isNot(contains('participant_id')));
+        expect(request.body, isNot(contains('user_id')));
         expect(events, hasLength(2));
         expect(events[0].attendeeCount, 12);
         expect(events[0].viewerRsvpStatus, RsvpStatus.going);
@@ -108,10 +109,9 @@ void main() {
     );
 
     test(
-      'getEventById requests the participant RPC with an ID filter',
+      'getEventById requests the current-user RPC with an ID filter',
       () async {
         late Request request;
-        final store = _TrackingParticipantIdStore(participantId);
         final client = _clientWith((receivedRequest) async {
           request = receivedRequest;
           return _jsonResponse(
@@ -125,62 +125,92 @@ void main() {
         });
         addTearDown(client.dispose);
         final repository = SupabaseEventsRepository(
-          participantIdStore: store,
+          authSessionProvider: const _FakeAuthSessionProvider(userId),
           client: client,
         );
 
         final event = await repository.getEventById('event-42');
 
         expect(request.method, 'POST');
-        expect(request.url.path, '/rest/v1/rpc/get_events_for_participant');
+        expect(request.url.path, '/rest/v1/rpc/get_events_for_current_user');
         expect(request.url.queryParameters['id'], 'eq.event-42');
-        expect(jsonDecode(request.body), {'participant_id': participantId});
-        expect(store.requestCount, 1);
+        expect(jsonDecode(request.body), isNull);
+        expect(request.body, isNot(contains('participant_id')));
+        expect(request.body, isNot(contains('user_id')));
         expect(event?.id, 'event-42');
         expect(event?.attendeeCount, 8);
         expect(event?.viewerRsvpStatus, RsvpStatus.interested);
       },
     );
 
-    test('accepted remote refresh replaces the participant cache', () async {
-      final cachedAt = DateTime.utc(2026, 6, 28, 12);
-      final store = _TrackingParticipantIdStore(participantId);
-      final cache = _FakeEventSnapshotCache();
+    test(
+      'accepted remote refresh replaces the authenticated user cache',
+      () async {
+        final cachedAt = DateTime.utc(2026, 6, 28, 12);
+        final cache = _FakeEventSnapshotCache();
+        final client = _clientWith(
+          (request) async => _jsonResponse(request, [
+            _eventRow(
+              id: 'refreshed-event',
+              attendeeCount: 5,
+              rsvpStatus: null,
+            ),
+          ]),
+        );
+        addTearDown(client.dispose);
+        final repository = SupabaseEventsRepository(
+          authSessionProvider: const _FakeAuthSessionProvider(userId),
+          client: client,
+          eventSnapshotCache: cache,
+          now: () => cachedAt,
+        );
+
+        final events = await repository.getEvents();
+        await repository.cacheEvents(events);
+
+        expect(events.single.id, 'refreshed-event');
+        expect(cache.userId, userId);
+        expect(cache.snapshot?.events.single.id, 'refreshed-event');
+        expect(cache.snapshot?.events.single.viewerRsvpStatus, isNull);
+        expect(cache.snapshot?.cachedAt, cachedAt);
+      },
+    );
+
+    test('cached events use only the authenticated user cache key', () async {
+      final snapshot = EventSnapshot(
+        events: [_event(id: 'cached-event')],
+        cachedAt: DateTime.utc(2026, 6, 29, 12),
+      );
+      final cache = _FakeEventSnapshotCache()
+        ..userId = userId
+        ..snapshot = snapshot;
       final client = _clientWith(
-        (request) async => _jsonResponse(request, [
-          _eventRow(id: 'refreshed-event', attendeeCount: 5, rsvpStatus: null),
-        ]),
+        (request) async => _jsonResponse(request, const []),
       );
       addTearDown(client.dispose);
       final repository = SupabaseEventsRepository(
-        participantIdStore: store,
+        authSessionProvider: const _FakeAuthSessionProvider(userId),
         client: client,
         eventSnapshotCache: cache,
-        now: () => cachedAt,
       );
 
-      final events = await repository.getEvents();
-      await repository.cacheEvents(events);
+      final cached = await repository.getCachedEvents();
 
-      expect(events.single.id, 'refreshed-event');
-      expect(cache.participantId, participantId);
-      expect(cache.snapshot?.events.single.id, 'refreshed-event');
-      expect(cache.snapshot?.events.single.viewerRsvpStatus, isNull);
-      expect(cache.snapshot?.cachedAt, cachedAt);
+      expect(cache.lastReadUserId, userId);
+      expect(cached, same(snapshot));
     });
 
     test(
-      'updateRsvp requests set_event_rsvp with participant and RSVP',
+      'updateRsvp requests set_event_rsvp_v2 without caller identity',
       () async {
         late Request request;
-        final store = _TrackingParticipantIdStore(participantId);
         final client = _clientWith((receivedRequest) async {
           request = receivedRequest;
           return _jsonResponse(receivedRequest, 'notGoing');
         });
         addTearDown(client.dispose);
         final repository = SupabaseEventsRepository(
-          participantIdStore: store,
+          authSessionProvider: const _FakeAuthSessionProvider(userId),
           client: client,
         );
 
@@ -190,26 +220,25 @@ void main() {
         );
 
         expect(request.method, 'POST');
-        expect(request.url.path, '/rest/v1/rpc/set_event_rsvp');
+        expect(request.url.path, '/rest/v1/rpc/set_event_rsvp_v2');
         expect(jsonDecode(request.body), {
           'event_id': 'event-7',
-          'participant_id': participantId,
           'status': 'notGoing',
         });
-        expect(store.requestCount, 1);
+        expect(request.body, isNot(contains('participant_id')));
+        expect(request.body, isNot(contains('user_id')));
       },
     );
 
     test(
       'updateRsvp throws when the RPC returns a mismatched status',
       () async {
-        final store = _TrackingParticipantIdStore(participantId);
         final client = _clientWith(
           (request) async => _jsonResponse(request, 'interested'),
         );
         addTearDown(client.dispose);
         final repository = SupabaseEventsRepository(
-          participantIdStore: store,
+          authSessionProvider: const _FakeAuthSessionProvider(userId),
           client: client,
         );
 
@@ -229,18 +258,16 @@ void main() {
                 ),
           ),
         );
-        expect(store.requestCount, 1);
       },
     );
 
     test('maps socket failures to network errors', () async {
-      final store = _TrackingParticipantIdStore(participantId);
       final client = _clientWith(
         (_) async => throw const SocketException('Network unreachable'),
       );
       addTearDown(client.dispose);
       final repository = SupabaseEventsRepository(
-        participantIdStore: store,
+        authSessionProvider: const _FakeAuthSessionProvider(userId),
         client: client,
       );
 
@@ -251,11 +278,10 @@ void main() {
     });
 
     test('maps request timeouts to timeout errors', () async {
-      final store = _TrackingParticipantIdStore(participantId);
       final client = _clientWith((_) => Completer<Response>().future);
       addTearDown(client.dispose);
       final repository = SupabaseEventsRepository(
-        participantIdStore: store,
+        authSessionProvider: const _FakeAuthSessionProvider(userId),
         client: client,
         requestTimeout: Duration.zero,
       );
@@ -269,14 +295,13 @@ void main() {
     test(
       'maps PostgREST permission failures to authorization errors',
       () async {
-        final store = _TrackingParticipantIdStore(participantId);
         final client = _clientWith(
           (request) async =>
               _postgrestErrorResponse(request, statusCode: 403, code: '42501'),
         );
         addTearDown(client.dispose);
         final repository = SupabaseEventsRepository(
-          participantIdStore: store,
+          authSessionProvider: const _FakeAuthSessionProvider(userId),
           client: client,
         );
 
@@ -288,13 +313,12 @@ void main() {
     );
 
     test('maps Supabase auth failures to authorization errors', () async {
-      final store = _TrackingParticipantIdStore(participantId);
       final client = _clientWith(
         (_) async => throw const AuthException('Invalid session'),
       );
       addTearDown(client.dispose);
       final repository = SupabaseEventsRepository(
-        participantIdStore: store,
+        authSessionProvider: const _FakeAuthSessionProvider(userId),
         client: client,
       );
 
@@ -305,14 +329,13 @@ void main() {
     });
 
     test('maps PostgREST validation failures to server errors', () async {
-      final store = _TrackingParticipantIdStore(participantId);
       final client = _clientWith(
         (request) async =>
             _postgrestErrorResponse(request, statusCode: 400, code: '23514'),
       );
       addTearDown(client.dispose);
       final repository = SupabaseEventsRepository(
-        participantIdStore: store,
+        authSessionProvider: const _FakeAuthSessionProvider(userId),
         client: client,
       );
 
@@ -323,13 +346,12 @@ void main() {
     });
 
     test('maps unrecognized failures to unknown errors', () async {
-      final store = _TrackingParticipantIdStore(participantId);
       final client = _clientWith(
         (_) async => throw Exception('Unexpected failure'),
       );
       addTearDown(client.dispose);
       final repository = SupabaseEventsRepository(
-        participantIdStore: store,
+        authSessionProvider: const _FakeAuthSessionProvider(userId),
         client: client,
       );
 
@@ -337,6 +359,33 @@ void main() {
         repository.getEvents(),
         _throwsAppError(AppErrorType.unknown),
       );
+    });
+
+    test('fails clearly before a request when no auth user exists', () async {
+      var requestCount = 0;
+      final client = _clientWith((request) async {
+        requestCount += 1;
+        return _jsonResponse(request, const []);
+      });
+      addTearDown(client.dispose);
+      final repository = SupabaseEventsRepository(
+        authSessionProvider: const _FakeAuthSessionProvider(null),
+        client: client,
+      );
+
+      await expectLater(
+        repository.getEvents(),
+        throwsA(
+          isA<AppException>()
+              .having((error) => error.type, 'type', AppErrorType.authorization)
+              .having(
+                (error) => error.cause.toString(),
+                'cause',
+                contains('active authenticated Supabase user'),
+              ),
+        ),
+      );
+      expect(requestCount, 0);
     });
   });
 }
@@ -414,31 +463,27 @@ Event _event({required String id}) {
   );
 }
 
-class _TrackingParticipantIdStore extends ParticipantIdStore {
-  _TrackingParticipantIdStore(this.participantId);
-
-  final String participantId;
-  int requestCount = 0;
+class _FakeAuthSessionProvider implements AuthSessionProvider {
+  const _FakeAuthSessionProvider(this.currentUserId);
 
   @override
-  Future<String> getOrCreateParticipantId() async {
-    requestCount += 1;
-    return participantId;
-  }
+  final String? currentUserId;
 }
 
 class _FakeEventSnapshotCache implements EventSnapshotCache {
-  String? participantId;
+  String? userId;
+  String? lastReadUserId;
   EventSnapshot? snapshot;
 
   @override
-  Future<EventSnapshot?> read(String participantId) async {
-    return this.participantId == participantId ? snapshot : null;
+  Future<EventSnapshot?> read(String userId) async {
+    lastReadUserId = userId;
+    return this.userId == userId ? snapshot : null;
   }
 
   @override
-  Future<void> write(String participantId, EventSnapshot snapshot) async {
-    this.participantId = participantId;
+  Future<void> write(String userId, EventSnapshot snapshot) async {
+    this.userId = userId;
     this.snapshot = snapshot;
   }
 }
