@@ -190,6 +190,9 @@ class _ToggleEventsRepository implements EventsRepository {
   Future<EventSnapshot?> getCachedEvents() async => cachedSnapshot;
 
   @override
+  Future<void> cacheEvents(List<Event> events) async {}
+
+  @override
   Future<void> createEvent(Event event) async {
     _events.add(event);
   }
@@ -237,6 +240,9 @@ class _PendingRsvpRepository implements EventsRepository {
 
   @override
   Future<EventSnapshot?> getCachedEvents() async => null;
+
+  @override
+  Future<void> cacheEvents(List<Event> events) async {}
 
   void completeUpdate() {
     _updateCompleter.complete();

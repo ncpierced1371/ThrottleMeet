@@ -17,6 +17,8 @@ class EventsController extends ChangeNotifier {
   AppErrorType? _errorType;
   bool _isShowingCachedEvents = false;
   DateTime? _cachedAt;
+  int _loadGeneration = 0;
+  Future<void> _cacheWriteQueue = Future.value();
 
   List<Event> get events => _events;
   bool get isLoading => _isLoading;
@@ -26,38 +28,74 @@ class EventsController extends ChangeNotifier {
   DateTime? get cachedAt => _cachedAt;
 
   Future<bool> loadEvents() async {
+    final generation = ++_loadGeneration;
     _isLoading = true;
     _errorMessage = null;
     _errorType = null;
     notifyListeners();
 
-    if (_events.isEmpty) {
-      try {
-        final snapshot = await _repository.getCachedEvents();
-        if (snapshot != null) {
-          _events = snapshot.events;
-          _isShowingCachedEvents = true;
-          _cachedAt = snapshot.cachedAt;
-          notifyListeners();
-        }
-      } catch (error) {
-        debugPrint('EventsController cached event load error: $error');
-      }
-    }
-
     try {
-      _events = await _repository.getEvents();
+      if (_events.isEmpty) {
+        try {
+          final snapshot = await _repository.getCachedEvents();
+          if (!_isCurrentLoad(generation)) {
+            return false;
+          }
+          if (snapshot != null) {
+            _events = snapshot.events;
+            _isShowingCachedEvents = true;
+            _cachedAt = snapshot.cachedAt;
+            notifyListeners();
+          }
+        } catch (error) {
+          if (!_isCurrentLoad(generation)) {
+            return false;
+          }
+          debugPrint('EventsController cached event load error: $error');
+        }
+      }
+
+      final events = await _repository.getEvents();
+      if (!_isCurrentLoad(generation)) {
+        return false;
+      }
+
+      _events = events;
       _isShowingCachedEvents = false;
       _cachedAt = null;
-      return true;
+      notifyListeners();
+
+      await _queueCacheWrite(events);
+      return _isCurrentLoad(generation);
     } catch (error) {
+      if (!_isCurrentLoad(generation)) {
+        return false;
+      }
       debugPrint('EventsController.loadEvents error: $error');
       _recordError(error, fallbackMessage: 'Unable to load events.');
       return false;
     } finally {
-      _isLoading = false;
-      notifyListeners();
+      if (_isCurrentLoad(generation)) {
+        _isLoading = false;
+        notifyListeners();
+      }
     }
+  }
+
+  bool _isCurrentLoad(int generation) => generation == _loadGeneration;
+
+  Future<void> _queueCacheWrite(List<Event> events) async {
+    final previousWrite = _cacheWriteQueue;
+    final write = () async {
+      await previousWrite;
+      try {
+        await _repository.cacheEvents(events);
+      } catch (error) {
+        debugPrint('EventsController event cache write error: $error');
+      }
+    }();
+    _cacheWriteQueue = write;
+    await write;
   }
 
   Event? getEventById(String id) {

@@ -84,7 +84,7 @@ void main() {
       },
     );
 
-    test('successful remote refresh replaces the participant cache', () async {
+    test('accepted remote refresh replaces the participant cache', () async {
       final cachedAt = DateTime.utc(2026, 6, 28, 12);
       final store = _TrackingParticipantIdStore(participantId);
       final cache = _FakeEventSnapshotCache();
@@ -102,6 +102,7 @@ void main() {
       );
 
       final events = await repository.getEvents();
+      await repository.cacheEvents(events);
 
       expect(events.single.id, 'refreshed-event');
       expect(cache.participantId, participantId);

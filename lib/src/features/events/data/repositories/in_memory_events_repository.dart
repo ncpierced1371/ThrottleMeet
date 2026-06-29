@@ -13,6 +13,9 @@ class InMemoryEventsRepository implements EventsRepository {
   Future<EventSnapshot?> getCachedEvents() async => null;
 
   @override
+  Future<void> cacheEvents(List<Event> events) async {}
+
+  @override
   Future<void> createEvent(Event event) async {
     _events.insert(0, event);
   }

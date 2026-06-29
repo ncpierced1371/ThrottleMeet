@@ -41,6 +41,25 @@ class SupabaseEventsRepository implements EventsRepository {
   }
 
   @override
+  Future<void> cacheEvents(List<Event> events) async {
+    final cache = _eventSnapshotCache;
+    if (cache == null) {
+      return;
+    }
+
+    try {
+      final participantId = await _participantIdStore
+          .getOrCreateParticipantId();
+      await cache.write(
+        participantId,
+        EventSnapshot(events: events, cachedAt: _now().toUtc()),
+      );
+    } catch (error) {
+      debugPrint('Unable to cache refreshed events: $error');
+    }
+  }
+
+  @override
   Future<void> createEvent(Event event) {
     return _execute('createEvent', () async {
       final record = EventRecord.fromEntity(event);
@@ -71,8 +90,8 @@ class SupabaseEventsRepository implements EventsRepository {
   }
 
   @override
-  Future<List<Event>> getEvents() async {
-    final result = await _execute('getEvents', () async {
+  Future<List<Event>> getEvents() {
+    return _execute('getEvents', () async {
       final participantId = await _participantIdStore
           .getOrCreateParticipantId();
       final data = await _client
@@ -89,22 +108,8 @@ class SupabaseEventsRepository implements EventsRepository {
       final events = data
           .map<Event>((item) => EventRecord.fromMap(item).toEntity())
           .toList();
-      return (participantId: participantId, events: events);
+      return events;
     });
-
-    final cache = _eventSnapshotCache;
-    if (cache != null) {
-      try {
-        await cache.write(
-          result.participantId,
-          EventSnapshot(events: result.events, cachedAt: _now().toUtc()),
-        );
-      } catch (error) {
-        debugPrint('Unable to cache refreshed events: $error');
-      }
-    }
-
-    return result.events;
   }
 
   @override

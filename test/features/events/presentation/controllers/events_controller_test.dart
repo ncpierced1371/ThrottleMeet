@@ -75,6 +75,83 @@ void main() {
     });
   });
 
+  group('EventsController refresh race protection', () {
+    test('older success cannot overwrite a newer success', () async {
+      final repository = _SequencedEventsRepository();
+      final controller = EventsController(repository: repository);
+      addTearDown(controller.dispose);
+
+      final olderLoad = controller.loadEvents();
+      await _waitForLoadRequests(repository, 1);
+      final newerLoad = controller.loadEvents();
+      await _waitForLoadRequests(repository, 2);
+
+      repository.loadRequests[1].complete([_newEvent]);
+      expect(await newerLoad, isTrue);
+      repository.loadRequests[0].complete([_existingEvent]);
+      expect(await olderLoad, isFalse);
+
+      expect(controller.events, [_newEvent]);
+      expect(controller.errorMessage, isNull);
+      expect(controller.isLoading, isFalse);
+      expect(controller.isShowingCachedEvents, isFalse);
+      expect(repository.cacheWrites, [
+        [_newEvent],
+      ]);
+    });
+
+    test('older failure cannot overwrite a newer success', () async {
+      final repository = _SequencedEventsRepository();
+      final controller = EventsController(repository: repository);
+      addTearDown(controller.dispose);
+
+      final olderLoad = controller.loadEvents();
+      await _waitForLoadRequests(repository, 1);
+      final newerLoad = controller.loadEvents();
+      await _waitForLoadRequests(repository, 2);
+
+      repository.loadRequests[1].complete([_newEvent]);
+      expect(await newerLoad, isTrue);
+      repository.loadRequests[0].completeError(_failure);
+      expect(await olderLoad, isFalse);
+
+      expect(controller.events, [_newEvent]);
+      expect(controller.errorMessage, isNull);
+      expect(controller.errorType, isNull);
+      expect(repository.cacheWrites, [
+        [_newEvent],
+      ]);
+    });
+
+    test('newer failure preserves accepted data and reports error', () async {
+      final repository = _SequencedEventsRepository();
+      final controller = EventsController(repository: repository);
+      addTearDown(controller.dispose);
+
+      final initialLoad = controller.loadEvents();
+      await _waitForLoadRequests(repository, 1);
+      repository.loadRequests[0].complete([_existingEvent]);
+      expect(await initialLoad, isTrue);
+
+      final olderLoad = controller.loadEvents();
+      await _waitForLoadRequests(repository, 2);
+      final newerLoad = controller.loadEvents();
+      await _waitForLoadRequests(repository, 3);
+
+      repository.loadRequests[1].complete([_newEvent]);
+      expect(await olderLoad, isFalse);
+      repository.loadRequests[2].completeError(_failure);
+      expect(await newerLoad, isFalse);
+
+      expect(controller.events, [_existingEvent]);
+      expect(controller.errorMessage, 'Unable to load events.');
+      expect(controller.isLoading, isFalse);
+      expect(repository.cacheWrites, [
+        [_existingEvent],
+      ]);
+    });
+  });
+
   group('EventsController typed errors', () {
     final cases = [
       (
@@ -307,6 +384,7 @@ class _FakeEventsRepository implements EventsRepository {
     : _events = List.of(events);
 
   final List<Event> _events;
+  final List<List<Event>> cacheWrites = [];
   EventSnapshot? cachedSnapshot;
   Completer<List<Event>>? pendingLoad;
   Object? loadError;
@@ -316,6 +394,11 @@ class _FakeEventsRepository implements EventsRepository {
 
   @override
   Future<EventSnapshot?> getCachedEvents() async => cachedSnapshot;
+
+  @override
+  Future<void> cacheEvents(List<Event> events) async {
+    cacheWrites.add(List.unmodifiable(events));
+  }
 
   @override
   Future<List<Event>> getEvents() async {
@@ -360,4 +443,45 @@ class _FakeEventsRepository implements EventsRepository {
       throw error;
     }
   }
+}
+
+Future<void> _waitForLoadRequests(
+  _SequencedEventsRepository repository,
+  int count,
+) async {
+  while (repository.loadRequests.length < count) {
+    await Future<void>.delayed(Duration.zero);
+  }
+}
+
+class _SequencedEventsRepository implements EventsRepository {
+  final List<Completer<List<Event>>> loadRequests = [];
+  final List<List<Event>> cacheWrites = [];
+
+  @override
+  Future<void> cacheEvents(List<Event> events) async {
+    cacheWrites.add(List.unmodifiable(events));
+  }
+
+  @override
+  Future<void> createEvent(Event event) async {}
+
+  @override
+  Future<EventSnapshot?> getCachedEvents() async => null;
+
+  @override
+  Future<Event?> getEventById(String id) async => null;
+
+  @override
+  Future<List<Event>> getEvents() {
+    final request = Completer<List<Event>>();
+    loadRequests.add(request);
+    return request.future;
+  }
+
+  @override
+  Future<void> updateRsvp({
+    required String eventId,
+    required RsvpStatus status,
+  }) async {}
 }

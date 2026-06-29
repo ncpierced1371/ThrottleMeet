@@ -7,6 +7,8 @@ abstract class EventsRepository {
 
   Future<List<Event>> getEvents();
 
+  Future<void> cacheEvents(List<Event> events);
+
   Future<Event?> getEventById(String id);
 
   Future<void> createEvent(Event event);
