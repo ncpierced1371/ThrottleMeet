@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:throttlemeet_v2/src/features/events/data/repositories/in_memory_events_repository.dart';
 import 'package:throttlemeet_v2/src/features/events/data/seeds/seed_events.dart';
 import 'package:throttlemeet_v2/src/features/events/domain/entities/event.dart';
+import 'package:throttlemeet_v2/src/features/events/domain/entities/event_snapshot.dart';
 import 'package:throttlemeet_v2/src/features/events/domain/entities/rsvp_status.dart';
 import 'package:throttlemeet_v2/src/features/events/domain/repositories/events_repository.dart';
 import 'package:throttlemeet_v2/src/features/events/presentation/controllers/events_controller.dart';
@@ -113,6 +114,27 @@ void main() {
     expect(find.text('No events yet'), findsNothing);
   });
 
+  testWidgets('labels cached events when remote refresh fails', (tester) async {
+    final cachedEvents = SeedEvents.build();
+    final repository = _ToggleEventsRepository(
+      cachedSnapshot: EventSnapshot(
+        events: cachedEvents,
+        cachedAt: DateTime.utc(2026, 6, 28, 12),
+      ),
+    )..shouldFail = true;
+    final controller = EventsController(repository: repository);
+    addTearDown(controller.dispose);
+    await controller.loadEvents();
+
+    await tester.pumpWidget(
+      MaterialApp(home: EventsListScreen(controller: controller)),
+    );
+
+    expect(find.text('Spring Canyon Run'), findsOneWidget);
+    expect(find.text('Showing saved events'), findsOneWidget);
+    expect(find.text('Unable to load events.'), findsOneWidget);
+  });
+
   testWidgets('disables RSVP choices while an update is pending', (
     tester,
   ) async {
@@ -157,11 +179,15 @@ void main() {
 }
 
 class _ToggleEventsRepository implements EventsRepository {
-  _ToggleEventsRepository({List<Event>? events})
+  _ToggleEventsRepository({List<Event>? events, this.cachedSnapshot})
     : _events = List.of(events ?? SeedEvents.build());
 
   bool shouldFail = false;
   final List<Event> _events;
+  final EventSnapshot? cachedSnapshot;
+
+  @override
+  Future<EventSnapshot?> getCachedEvents() async => cachedSnapshot;
 
   @override
   Future<void> createEvent(Event event) async {
@@ -208,6 +234,9 @@ class _PendingRsvpRepository implements EventsRepository {
 
   final Completer<void> _updateCompleter = Completer<void>();
   int updateCallCount = 0;
+
+  @override
+  Future<EventSnapshot?> getCachedEvents() async => null;
 
   void completeUpdate() {
     _updateCompleter.complete();

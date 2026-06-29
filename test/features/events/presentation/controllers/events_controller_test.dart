@@ -1,11 +1,80 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:throttlemeet_v2/src/core/errors/app_exception.dart';
 import 'package:throttlemeet_v2/src/features/events/domain/entities/event.dart';
+import 'package:throttlemeet_v2/src/features/events/domain/entities/event_snapshot.dart';
 import 'package:throttlemeet_v2/src/features/events/domain/entities/rsvp_status.dart';
 import 'package:throttlemeet_v2/src/features/events/domain/repositories/events_repository.dart';
 import 'package:throttlemeet_v2/src/features/events/presentation/controllers/events_controller.dart';
 
 void main() {
+  group('EventsController cached loading', () {
+    final cachedAt = DateTime.utc(2026, 6, 30, 12);
+
+    test('shows cached events before remote refresh completes', () async {
+      final pendingLoad = Completer<List<Event>>();
+      final repository = _FakeEventsRepository(
+        cachedSnapshot: EventSnapshot(
+          events: [_existingEvent],
+          cachedAt: cachedAt,
+        ),
+      )..pendingLoad = pendingLoad;
+      final controller = EventsController(repository: repository);
+      addTearDown(controller.dispose);
+
+      final load = controller.loadEvents();
+      await Future<void>.delayed(Duration.zero);
+
+      expect(controller.events, [_existingEvent]);
+      expect(controller.isShowingCachedEvents, isTrue);
+      expect(controller.cachedAt, cachedAt);
+      expect(controller.isLoading, isTrue);
+
+      pendingLoad.complete([_newEvent]);
+      expect(await load, isTrue);
+      expect(controller.events, [_newEvent]);
+      expect(controller.isShowingCachedEvents, isFalse);
+      expect(controller.cachedAt, isNull);
+    });
+
+    test(
+      'remote failure keeps cached events and reports refresh error',
+      () async {
+        final repository = _FakeEventsRepository(
+          cachedSnapshot: EventSnapshot(
+            events: [_existingEvent],
+            cachedAt: cachedAt,
+          ),
+        )..loadError = _failure;
+        final controller = EventsController(repository: repository);
+        addTearDown(controller.dispose);
+
+        final succeeded = await controller.loadEvents();
+
+        expect(succeeded, isFalse);
+        expect(controller.events, [_existingEvent]);
+        expect(controller.isShowingCachedEvents, isTrue);
+        expect(controller.cachedAt, cachedAt);
+        expect(controller.errorMessage, 'Unable to load events.');
+      },
+    );
+
+    test('remote failure without cache leaves existing error state', () async {
+      final repository = _FakeEventsRepository()..loadError = _failure;
+      final controller = EventsController(repository: repository);
+      addTearDown(controller.dispose);
+
+      final succeeded = await controller.loadEvents();
+
+      expect(succeeded, isFalse);
+      expect(controller.events, isEmpty);
+      expect(controller.isShowingCachedEvents, isFalse);
+      expect(controller.cachedAt, isNull);
+      expect(controller.errorMessage, 'Unable to load events.');
+    });
+  });
+
   group('EventsController typed errors', () {
     final cases = [
       (
@@ -234,14 +303,19 @@ final _newEvent = Event(
 );
 
 class _FakeEventsRepository implements EventsRepository {
-  _FakeEventsRepository({List<Event> events = const []})
+  _FakeEventsRepository({List<Event> events = const [], this.cachedSnapshot})
     : _events = List.of(events);
 
   final List<Event> _events;
+  EventSnapshot? cachedSnapshot;
+  Completer<List<Event>>? pendingLoad;
   Object? loadError;
   Object? createError;
   Object? updateError;
   int loadCallCount = 0;
+
+  @override
+  Future<EventSnapshot?> getCachedEvents() async => cachedSnapshot;
 
   @override
   Future<List<Event>> getEvents() async {
@@ -249,6 +323,10 @@ class _FakeEventsRepository implements EventsRepository {
     final error = loadError;
     if (error != null) {
       throw error;
+    }
+    final pending = pendingLoad;
+    if (pending != null) {
+      return pending.future;
     }
     return List.unmodifiable(_events);
   }

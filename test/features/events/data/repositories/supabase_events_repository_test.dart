@@ -8,7 +8,9 @@ import 'package:http/testing.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:throttlemeet_v2/src/core/errors/app_exception.dart';
 import 'package:throttlemeet_v2/src/core/identity/participant_id_store.dart';
+import 'package:throttlemeet_v2/src/features/events/data/cache/event_snapshot_cache.dart';
 import 'package:throttlemeet_v2/src/features/events/data/repositories/supabase_events_repository.dart';
+import 'package:throttlemeet_v2/src/features/events/domain/entities/event_snapshot.dart';
 import 'package:throttlemeet_v2/src/features/events/domain/entities/rsvp_status.dart';
 
 void main() {
@@ -81,6 +83,32 @@ void main() {
         expect(event?.viewerRsvpStatus, RsvpStatus.interested);
       },
     );
+
+    test('successful remote refresh replaces the participant cache', () async {
+      final cachedAt = DateTime.utc(2026, 6, 28, 12);
+      final store = _TrackingParticipantIdStore(participantId);
+      final cache = _FakeEventSnapshotCache();
+      final client = _clientWith(
+        (request) async => _jsonResponse(request, [
+          _eventRow(id: 'refreshed-event', attendeeCount: 5, rsvpStatus: null),
+        ]),
+      );
+      addTearDown(client.dispose);
+      final repository = SupabaseEventsRepository(
+        participantIdStore: store,
+        client: client,
+        eventSnapshotCache: cache,
+        now: () => cachedAt,
+      );
+
+      final events = await repository.getEvents();
+
+      expect(events.single.id, 'refreshed-event');
+      expect(cache.participantId, participantId);
+      expect(cache.snapshot?.events.single.id, 'refreshed-event');
+      expect(cache.snapshot?.events.single.viewerRsvpStatus, isNull);
+      expect(cache.snapshot?.cachedAt, cachedAt);
+    });
 
     test(
       'updateRsvp requests set_event_rsvp with participant and RSVP',
@@ -323,5 +351,21 @@ class _TrackingParticipantIdStore extends ParticipantIdStore {
   Future<String> getOrCreateParticipantId() async {
     requestCount += 1;
     return participantId;
+  }
+}
+
+class _FakeEventSnapshotCache implements EventSnapshotCache {
+  String? participantId;
+  EventSnapshot? snapshot;
+
+  @override
+  Future<EventSnapshot?> read(String participantId) async {
+    return this.participantId == participantId ? snapshot : null;
+  }
+
+  @override
+  Future<void> write(String participantId, EventSnapshot snapshot) async {
+    this.participantId = participantId;
+    this.snapshot = snapshot;
   }
 }

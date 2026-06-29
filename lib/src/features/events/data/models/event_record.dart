@@ -78,6 +78,14 @@ class EventRecord {
     };
   }
 
+  Map<String, dynamic> toSnapshotMap() {
+    return {
+      ...toCreateMap(),
+      'attendee_count': attendeeCount,
+      'rsvp_status': viewerRsvpStatus?.name,
+    };
+  }
+
   static DateTime _parseTimestamp(Map<String, dynamic> map, String fieldName) {
     final value = map[fieldName];
 

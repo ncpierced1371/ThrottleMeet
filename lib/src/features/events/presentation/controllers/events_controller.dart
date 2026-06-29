@@ -15,11 +15,15 @@ class EventsController extends ChangeNotifier {
   bool _isLoading = false;
   String? _errorMessage;
   AppErrorType? _errorType;
+  bool _isShowingCachedEvents = false;
+  DateTime? _cachedAt;
 
   List<Event> get events => _events;
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
   AppErrorType? get errorType => _errorType;
+  bool get isShowingCachedEvents => _isShowingCachedEvents;
+  DateTime? get cachedAt => _cachedAt;
 
   Future<bool> loadEvents() async {
     _isLoading = true;
@@ -27,8 +31,24 @@ class EventsController extends ChangeNotifier {
     _errorType = null;
     notifyListeners();
 
+    if (_events.isEmpty) {
+      try {
+        final snapshot = await _repository.getCachedEvents();
+        if (snapshot != null) {
+          _events = snapshot.events;
+          _isShowingCachedEvents = true;
+          _cachedAt = snapshot.cachedAt;
+          notifyListeners();
+        }
+      } catch (error) {
+        debugPrint('EventsController cached event load error: $error');
+      }
+    }
+
     try {
       _events = await _repository.getEvents();
+      _isShowingCachedEvents = false;
+      _cachedAt = null;
       return true;
     } catch (error) {
       debugPrint('EventsController.loadEvents error: $error');

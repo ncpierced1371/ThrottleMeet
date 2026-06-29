@@ -3,8 +3,10 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../../core/identity/participant_id_store.dart';
 import '../../domain/entities/event.dart';
+import '../../domain/entities/event_snapshot.dart';
 import '../../domain/entities/rsvp_status.dart';
 import '../../domain/repositories/events_repository.dart';
+import '../cache/event_snapshot_cache.dart';
 import '../models/event_record.dart';
 import 'supabase_error_mapper.dart';
 
@@ -12,14 +14,31 @@ class SupabaseEventsRepository implements EventsRepository {
   SupabaseEventsRepository({
     required ParticipantIdStore participantIdStore,
     SupabaseClient? client,
+    EventSnapshotCache? eventSnapshotCache,
     Duration requestTimeout = const Duration(seconds: 15),
+    DateTime Function()? now,
   }) : _participantIdStore = participantIdStore,
        _client = client ?? Supabase.instance.client,
+       _eventSnapshotCache = eventSnapshotCache,
+       _now = now ?? DateTime.now,
        _requestTimeout = requestTimeout;
 
   final ParticipantIdStore _participantIdStore;
   final SupabaseClient _client;
+  final EventSnapshotCache? _eventSnapshotCache;
+  final DateTime Function() _now;
   final Duration _requestTimeout;
+
+  @override
+  Future<EventSnapshot?> getCachedEvents() async {
+    final cache = _eventSnapshotCache;
+    if (cache == null) {
+      return null;
+    }
+
+    final participantId = await _participantIdStore.getOrCreateParticipantId();
+    return cache.read(participantId);
+  }
 
   @override
   Future<void> createEvent(Event event) {
@@ -52,8 +71,8 @@ class SupabaseEventsRepository implements EventsRepository {
   }
 
   @override
-  Future<List<Event>> getEvents() {
-    return _execute('getEvents', () async {
+  Future<List<Event>> getEvents() async {
+    final result = await _execute('getEvents', () async {
       final participantId = await _participantIdStore
           .getOrCreateParticipantId();
       final data = await _client
@@ -67,10 +86,25 @@ class SupabaseEventsRepository implements EventsRepository {
         'SupabaseEventsRepository.getEvents rows returned: ${data.length}',
       );
 
-      return data
+      final events = data
           .map<Event>((item) => EventRecord.fromMap(item).toEntity())
           .toList();
+      return (participantId: participantId, events: events);
     });
+
+    final cache = _eventSnapshotCache;
+    if (cache != null) {
+      try {
+        await cache.write(
+          result.participantId,
+          EventSnapshot(events: result.events, cachedAt: _now().toUtc()),
+        );
+      } catch (error) {
+        debugPrint('Unable to cache refreshed events: $error');
+      }
+    }
+
+    return result.events;
   }
 
   @override

@@ -93,6 +93,7 @@ class _EventsListBody extends StatelessWidget {
     return Column(
       children: [
         if (controller.isLoading) const LinearProgressIndicator(),
+        if (controller.isShowingCachedEvents) const _CachedEventsBanner(),
         if (controller.errorMessage != null)
           _EventsLoadErrorBanner(controller: controller),
         Expanded(
@@ -120,6 +121,29 @@ class _EventsListBody extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _CachedEventsBanner extends StatelessWidget {
+  const _CachedEventsBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Material(
+      color: colorScheme.secondaryContainer,
+      child: const Padding(
+        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        child: Row(
+          children: [
+            Icon(Icons.offline_pin_outlined, size: 18),
+            SizedBox(width: 8),
+            Text('Showing saved events'),
+          ],
+        ),
+      ),
     );
   }
 }

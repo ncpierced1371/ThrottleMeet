@@ -1,4 +1,5 @@
 import '../../domain/entities/event.dart';
+import '../../domain/entities/event_snapshot.dart';
 import '../../domain/entities/rsvp_status.dart';
 import '../../domain/repositories/events_repository.dart';
 import '../seeds/seed_events.dart';
@@ -7,6 +8,9 @@ class InMemoryEventsRepository implements EventsRepository {
   InMemoryEventsRepository() : _events = SeedEvents.build();
 
   final List<Event> _events;
+
+  @override
+  Future<EventSnapshot?> getCachedEvents() async => null;
 
   @override
   Future<void> createEvent(Event event) async {
