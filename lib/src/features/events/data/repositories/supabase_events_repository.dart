@@ -62,8 +62,34 @@ class SupabaseEventsRepository implements EventsRepository {
   @override
   Future<void> createEvent(Event event) {
     return _execute('createEvent', () async {
+      final participantId = await _participantIdStore
+          .getOrCreateParticipantId();
       final record = EventRecord.fromEntity(event);
-      await _client.from('events').insert(record.toCreateMap());
+      final createValues = record.toCreateMap();
+      final confirmation = await _client.rpc<Map<String, dynamic>>(
+        'create_event_with_creator_rsvp',
+        params: {
+          'event_id': createValues['id'],
+          'title': createValues['title'],
+          'description': createValues['description'],
+          'location_name': createValues['location_name'],
+          'host_name': createValues['host_name'],
+          'start_time': createValues['start_time'],
+          'end_time': createValues['end_time'],
+          'participant_id': participantId,
+        },
+      );
+
+      final attendeeCount = (confirmation['attendee_count'] as num?)?.toInt();
+      if (confirmation['id'] != event.id ||
+          attendeeCount != 1 ||
+          confirmation['rsvp_status'] != RsvpStatus.going.name) {
+        throw StateError(
+          'Event creation returned an unexpected confirmation: '
+          '$confirmation',
+        );
+      }
+
       debugPrint('SupabaseEventsRepository.createEvent success: ${event.id}');
     });
   }

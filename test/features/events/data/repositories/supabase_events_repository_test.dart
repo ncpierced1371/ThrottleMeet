@@ -10,6 +10,7 @@ import 'package:throttlemeet_v2/src/core/errors/app_exception.dart';
 import 'package:throttlemeet_v2/src/core/identity/participant_id_store.dart';
 import 'package:throttlemeet_v2/src/features/events/data/cache/event_snapshot_cache.dart';
 import 'package:throttlemeet_v2/src/features/events/data/repositories/supabase_events_repository.dart';
+import 'package:throttlemeet_v2/src/features/events/domain/entities/event.dart';
 import 'package:throttlemeet_v2/src/features/events/domain/entities/event_snapshot.dart';
 import 'package:throttlemeet_v2/src/features/events/domain/entities/rsvp_status.dart';
 
@@ -17,6 +18,63 @@ void main() {
   const participantId = 'participant-123';
 
   group('SupabaseEventsRepository', () {
+    test('createEvent atomically creates the event and creator RSVP', () async {
+      late Request request;
+      final event = _event(id: 'new-event');
+      final store = _TrackingParticipantIdStore(participantId);
+      final client = _clientWith((receivedRequest) async {
+        request = receivedRequest;
+        return _jsonResponse(receivedRequest, {
+          'id': event.id,
+          'attendee_count': 1,
+          'rsvp_status': 'going',
+        });
+      });
+      addTearDown(client.dispose);
+      final repository = SupabaseEventsRepository(
+        participantIdStore: store,
+        client: client,
+      );
+
+      await repository.createEvent(event);
+
+      expect(request.method, 'POST');
+      expect(request.url.path, '/rest/v1/rpc/create_event_with_creator_rsvp');
+      expect(jsonDecode(request.body), {
+        'event_id': 'new-event',
+        'title': 'Test Meet',
+        'description': 'A test event.',
+        'location_name': 'Test Garage',
+        'host_name': 'Test Host',
+        'start_time': '2026-07-01T18:00:00.000Z',
+        'end_time': '2026-07-01T20:00:00.000Z',
+        'participant_id': participantId,
+      });
+      expect(store.requestCount, 1);
+    });
+
+    test('createEvent rejects a mismatched RPC confirmation', () async {
+      final event = _event(id: 'new-event');
+      final store = _TrackingParticipantIdStore(participantId);
+      final client = _clientWith(
+        (request) async => _jsonResponse(request, {
+          'id': event.id,
+          'attendee_count': 0,
+          'rsvp_status': null,
+        }),
+      );
+      addTearDown(client.dispose);
+      final repository = SupabaseEventsRepository(
+        participantIdStore: store,
+        client: client,
+      );
+
+      await expectLater(
+        repository.createEvent(event),
+        _throwsAppError(AppErrorType.validationOrServer),
+      );
+    });
+
     test(
       'getEvents requests the participant RPC and maps attendee and RSVP data',
       () async {
@@ -340,6 +398,20 @@ Map<String, dynamic> _eventRow({
     'attendee_count': attendeeCount,
     'rsvp_status': rsvpStatus,
   };
+}
+
+Event _event({required String id}) {
+  return Event(
+    id: id,
+    title: 'Test Meet',
+    description: 'A test event.',
+    locationName: 'Test Garage',
+    hostName: 'Test Host',
+    startTime: DateTime.utc(2026, 7, 1, 18),
+    endTime: DateTime.utc(2026, 7, 1, 20),
+    attendeeCount: 0,
+    viewerRsvpStatus: RsvpStatus.going,
+  );
 }
 
 class _TrackingParticipantIdStore extends ParticipantIdStore {
