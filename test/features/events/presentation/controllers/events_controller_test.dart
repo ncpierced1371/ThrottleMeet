@@ -1,10 +1,49 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:throttlemeet_v2/src/core/errors/app_exception.dart';
 import 'package:throttlemeet_v2/src/features/events/domain/entities/event.dart';
 import 'package:throttlemeet_v2/src/features/events/domain/entities/rsvp_status.dart';
 import 'package:throttlemeet_v2/src/features/events/domain/repositories/events_repository.dart';
 import 'package:throttlemeet_v2/src/features/events/presentation/controllers/events_controller.dart';
 
 void main() {
+  group('EventsController typed errors', () {
+    final cases = [
+      (
+        AppErrorType.network,
+        'No network connection. Check your connection and try again.',
+      ),
+      (AppErrorType.timeout, 'The request timed out. Please try again.'),
+      (
+        AppErrorType.authorization,
+        'You do not have permission to perform this action.',
+      ),
+      (
+        AppErrorType.validationOrServer,
+        'The server could not complete the request. Please try again.',
+      ),
+      (AppErrorType.unknown, 'Unable to load events.'),
+    ];
+
+    for (final (type, message) in cases) {
+      test('exposes a user message for $type', () async {
+        final repository = _FakeEventsRepository()
+          ..loadError = AppException(
+            type: type,
+            cause: Exception('Fake typed failure'),
+          );
+        final controller = EventsController(repository: repository);
+        addTearDown(controller.dispose);
+
+        final succeeded = await controller.loadEvents();
+
+        expect(succeeded, isFalse);
+        expect(controller.errorType, type);
+        expect(controller.errorMessage, message);
+        expect(controller.isLoading, isFalse);
+      });
+    }
+  });
+
   group('EventsController failure paths', () {
     test('loadEvents sets an error and resets loading after failure', () async {
       final repository = _FakeEventsRepository()..loadError = _failure;
@@ -138,6 +177,7 @@ void main() {
         final succeeded = await controller.createNewEvent(_newEvent);
 
         expect(succeeded, isTrue);
+        expect(controller.errorType, isNull);
         expect(controller.errorMessage, isNull);
         expect(controller.events, [_existingEvent, _newEvent]);
       },
@@ -161,6 +201,7 @@ void main() {
       );
 
       expect(succeeded, isTrue);
+      expect(controller.errorType, isNull);
       expect(controller.errorMessage, isNull);
     });
   });

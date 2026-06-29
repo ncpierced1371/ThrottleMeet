@@ -1,9 +1,12 @@
+import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart';
 import 'package:http/testing.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:throttlemeet_v2/src/core/errors/app_exception.dart';
 import 'package:throttlemeet_v2/src/core/identity/participant_id_store.dart';
 import 'package:throttlemeet_v2/src/features/events/data/repositories/supabase_events_repository.dart';
 import 'package:throttlemeet_v2/src/features/events/domain/entities/rsvp_status.dart';
@@ -126,17 +129,153 @@ void main() {
         await expectLater(
           repository.updateRsvp(eventId: 'event-7', status: RsvpStatus.going),
           throwsA(
-            isA<StateError>().having(
-              (error) => error.message,
-              'message',
-              contains('interested'),
-            ),
+            isA<AppException>()
+                .having(
+                  (error) => error.type,
+                  'type',
+                  AppErrorType.validationOrServer,
+                )
+                .having(
+                  (error) => error.cause.toString(),
+                  'cause',
+                  contains('interested'),
+                ),
           ),
         );
         expect(store.requestCount, 1);
       },
     );
+
+    test('maps socket failures to network errors', () async {
+      final store = _TrackingParticipantIdStore(participantId);
+      final client = _clientWith(
+        (_) async => throw const SocketException('Network unreachable'),
+      );
+      addTearDown(client.dispose);
+      final repository = SupabaseEventsRepository(
+        participantIdStore: store,
+        client: client,
+      );
+
+      await expectLater(
+        repository.getEvents(),
+        _throwsAppError(AppErrorType.network),
+      );
+    });
+
+    test('maps request timeouts to timeout errors', () async {
+      final store = _TrackingParticipantIdStore(participantId);
+      final client = _clientWith((_) => Completer<Response>().future);
+      addTearDown(client.dispose);
+      final repository = SupabaseEventsRepository(
+        participantIdStore: store,
+        client: client,
+        requestTimeout: Duration.zero,
+      );
+
+      await expectLater(
+        repository.getEvents(),
+        _throwsAppError(AppErrorType.timeout),
+      );
+    });
+
+    test(
+      'maps PostgREST permission failures to authorization errors',
+      () async {
+        final store = _TrackingParticipantIdStore(participantId);
+        final client = _clientWith(
+          (request) async =>
+              _postgrestErrorResponse(request, statusCode: 403, code: '42501'),
+        );
+        addTearDown(client.dispose);
+        final repository = SupabaseEventsRepository(
+          participantIdStore: store,
+          client: client,
+        );
+
+        await expectLater(
+          repository.getEvents(),
+          _throwsAppError(AppErrorType.authorization),
+        );
+      },
+    );
+
+    test('maps Supabase auth failures to authorization errors', () async {
+      final store = _TrackingParticipantIdStore(participantId);
+      final client = _clientWith(
+        (_) async => throw const AuthException('Invalid session'),
+      );
+      addTearDown(client.dispose);
+      final repository = SupabaseEventsRepository(
+        participantIdStore: store,
+        client: client,
+      );
+
+      await expectLater(
+        repository.getEvents(),
+        _throwsAppError(AppErrorType.authorization),
+      );
+    });
+
+    test('maps PostgREST validation failures to server errors', () async {
+      final store = _TrackingParticipantIdStore(participantId);
+      final client = _clientWith(
+        (request) async =>
+            _postgrestErrorResponse(request, statusCode: 400, code: '23514'),
+      );
+      addTearDown(client.dispose);
+      final repository = SupabaseEventsRepository(
+        participantIdStore: store,
+        client: client,
+      );
+
+      await expectLater(
+        repository.getEvents(),
+        _throwsAppError(AppErrorType.validationOrServer),
+      );
+    });
+
+    test('maps unrecognized failures to unknown errors', () async {
+      final store = _TrackingParticipantIdStore(participantId);
+      final client = _clientWith(
+        (_) async => throw Exception('Unexpected failure'),
+      );
+      addTearDown(client.dispose);
+      final repository = SupabaseEventsRepository(
+        participantIdStore: store,
+        client: client,
+      );
+
+      await expectLater(
+        repository.getEvents(),
+        _throwsAppError(AppErrorType.unknown),
+      );
+    });
   });
+}
+
+Matcher _throwsAppError(AppErrorType type) {
+  return throwsA(
+    isA<AppException>().having((error) => error.type, 'type', type),
+  );
+}
+
+Response _postgrestErrorResponse(
+  Request request, {
+  required int statusCode,
+  required String code,
+}) {
+  return Response(
+    jsonEncode({
+      'message': 'Fake PostgREST failure',
+      'code': code,
+      'details': null,
+      'hint': null,
+    }),
+    statusCode,
+    request: request,
+    headers: {'content-type': 'application/json'},
+  );
 }
 
 SupabaseClient _clientWith(MockClientHandler handler) {
