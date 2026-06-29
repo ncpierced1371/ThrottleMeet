@@ -1,4 +1,16 @@
+import 'environment.dart';
+
 class SupabaseConfig {
-  static const url = 'https://zewlanatxkrqglgzwnuj.supabase.co';
-  static const anonKey = 'sb_publishable_CpTHmPW7wea7pua933jcwA_KMfad6yP';
+  const SupabaseConfig({required this.url, required this.publishableKey});
+
+  factory SupabaseConfig.fromEnvironment({Environment? environment}) {
+    final values = environment ?? Environment.load();
+    return SupabaseConfig(
+      url: values.supabaseUrl,
+      publishableKey: values.supabaseKey,
+    );
+  }
+
+  final String url;
+  final String publishableKey;
 }

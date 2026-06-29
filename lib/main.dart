@@ -6,9 +6,10 @@ import 'src/app.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  final supabaseConfig = SupabaseConfig.fromEnvironment();
   await Supabase.initialize(
-    url: SupabaseConfig.url,
-    publishableKey: SupabaseConfig.anonKey,
+    url: supabaseConfig.url,
+    publishableKey: supabaseConfig.publishableKey,
   );
   runApp(const ThrottleMeetApp());
 }
