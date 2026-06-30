@@ -1,4 +1,4 @@
--- Verify legacy participant compatibility and the authenticated v2 RSVP path.
+-- Verify the authenticated v2 RSVP path after the anonymous security cutoff.
 --
 -- Run manually against a local Supabase database after applying migrations.
 -- The session must be allowed to insert fixture rows into auth.users and SET
@@ -24,39 +24,51 @@ values
   ('10000000-0000-4000-8000-000000000001'::uuid),
   ('10000000-0000-4000-8000-000000000002'::uuid);
 
--- Legacy anonymous create, RSVP, and participant-aware projection still work.
+-- Legacy functions remain defined for rollback, but anonymous execution is
+-- denied after the security cutoff.
 set local role anon;
 
 do $$
 declare
-  legacy_event record;
+  legacy_read_rejected boolean := false;
+  legacy_rsvp_rejected boolean := false;
+  legacy_create_rejected boolean := false;
 begin
-  perform public.create_event_with_creator_rsvp(
-    event_id => 'auth-expansion-legacy-verification',
-    title => 'Legacy RSVP Verification',
-    description => 'Temporary legacy fixture',
-    location_name => 'Local Test Garage',
-    host_name => 'Legacy Host',
-    start_time => pg_catalog.now() + interval '1 day',
-    end_time => pg_catalog.now() + interval '1 day 2 hours',
-    participant_id => 'legacy-participant-a'
-  );
+  begin
+    perform public.get_events_for_participant('legacy-participant-a');
+  exception
+    when insufficient_privilege then legacy_read_rejected := true;
+  end;
 
-  if public.set_event_rsvp(
-    event_id => 'auth-expansion-legacy-verification',
-    participant_id => 'legacy-participant-b',
-    status => 'going'
-  ) is distinct from 'going' then
-    raise exception 'legacy RSVP path did not return going';
-  end if;
+  begin
+    perform public.set_event_rsvp(
+      event_id => 'auth-expansion-legacy-verification',
+      participant_id => 'legacy-participant-a',
+      status => 'going'
+    );
+  exception
+    when insufficient_privilege then legacy_rsvp_rejected := true;
+  end;
 
-  select attendee_count, rsvp_status into strict legacy_event
-  from public.get_events_for_participant('legacy-participant-a')
-  where id = 'auth-expansion-legacy-verification';
+  begin
+    perform public.create_event_with_creator_rsvp(
+      event_id => 'auth-expansion-legacy-verification',
+      title => 'Legacy RSVP Verification',
+      description => 'Must not be created anonymously',
+      location_name => 'Local Test Garage',
+      host_name => 'Legacy Host',
+      start_time => pg_catalog.now() + interval '1 day',
+      end_time => pg_catalog.now() + interval '1 day 2 hours',
+      participant_id => 'legacy-participant-a'
+    );
+  exception
+    when insufficient_privilege then legacy_create_rejected := true;
+  end;
 
-  if legacy_event.attendee_count is distinct from 2
-    or legacy_event.rsvp_status is distinct from 'going' then
-    raise exception 'legacy participant projection or aggregation failed';
+  if not legacy_read_rejected
+    or not legacy_rsvp_rejected
+    or not legacy_create_rejected then
+    raise exception 'anon unexpectedly executed a legacy participant RPC';
   end if;
 end;
 $$;
