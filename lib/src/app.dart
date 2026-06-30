@@ -30,7 +30,10 @@ class ThrottleMeetApp extends StatefulWidget {
 class _ThrottleMeetAppState extends State<ThrottleMeetApp> {
   late final AuthBootstrapController _authBootstrapController;
   late final bool _ownsAuthBootstrapController;
+  final _scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
   EventsController? _eventsController;
+  String? _eventsUserId;
+  ProfileSyncStatus _lastProfileSyncStatus = ProfileSyncStatus.idle;
 
   @override
   void initState() {
@@ -51,14 +54,60 @@ class _ThrottleMeetAppState extends State<ThrottleMeetApp> {
       return;
     }
 
-    if (_authBootstrapController.state == AuthBootstrapState.ready &&
-        _eventsController == null) {
-      _eventsController =
-          widget.eventsControllerFactory?.call() ?? _buildEventsController();
+    final authState = _authBootstrapController.state;
+    final authenticatedUserId = _authBootstrapController.userId;
+    if (authState == AuthBootstrapState.ready &&
+        authenticatedUserId != null &&
+        (_eventsController == null || _eventsUserId != authenticatedUserId)) {
+      _eventsController?.dispose();
+      _eventsController = _createEventsController();
+      _eventsUserId = authenticatedUserId;
       unawaited(_eventsController!.loadEvents());
+    } else if (authState == AuthBootstrapState.error) {
+      _eventsController?.dispose();
+      _eventsController = null;
+      _eventsUserId = null;
     }
 
+    _handleProfileSyncMessage();
     setState(() {});
+  }
+
+  EventsController _createEventsController() {
+    return widget.eventsControllerFactory?.call() ?? _buildEventsController();
+  }
+
+  void _handleProfileSyncMessage() {
+    final status = _authBootstrapController.profileSyncStatus;
+    if (status == _lastProfileSyncStatus) {
+      return;
+    }
+    _lastProfileSyncStatus = status;
+
+    if (status == ProfileSyncStatus.error) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) {
+          return;
+        }
+        _scaffoldMessengerKey.currentState
+          ?..hideCurrentSnackBar()
+          ..showSnackBar(
+            SnackBar(
+              content: const Text(
+                'Profile unavailable. Saved events are still available.',
+              ),
+              action: SnackBarAction(
+                label: 'Retry profile',
+                onPressed: () {
+                  unawaited(_authBootstrapController.retryProfileSync());
+                },
+              ),
+            ),
+          );
+      });
+    } else if (status == ProfileSyncStatus.ready) {
+      _scaffoldMessengerKey.currentState?.hideCurrentSnackBar();
+    }
   }
 
   EventsController _buildEventsController() {
@@ -82,6 +131,7 @@ class _ThrottleMeetAppState extends State<ThrottleMeetApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      scaffoldMessengerKey: _scaffoldMessengerKey,
       title: 'ThrottleMeet',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light(),
