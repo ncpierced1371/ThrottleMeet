@@ -9,6 +9,7 @@ begin;
 delete from public.events
 where id in (
   'security-cutoff-v2-event',
+  'security-cutoff-rsvp-event',
   'security-cutoff-direct-event',
   'security-cutoff-legacy-event'
 );
@@ -18,6 +19,29 @@ where id = '20000000-0000-4000-8000-000000000001'::uuid;
 
 insert into auth.users (id)
 values ('20000000-0000-4000-8000-000000000001'::uuid);
+
+-- Create the RSVP target as the database owner before changing roles. This
+-- guarantees every later RSVP insert/upsert references an existing event while
+-- keeping authenticated v2 event creation as a separate RPC fixture.
+insert into public.events (
+  id,
+  title,
+  description,
+  location_name,
+  host_name,
+  start_time,
+  end_time,
+  creator_id
+) values (
+  'security-cutoff-rsvp-event',
+  'Security Cutoff RSVP Fixture',
+  'Privileged fixture for mixed identity RSVP verification',
+  'Local Test Garage',
+  'Database Owner Fixture',
+  pg_catalog.now() + interval '2 days',
+  pg_catalog.now() + interval '2 days 2 hours',
+  '20000000-0000-4000-8000-000000000001'::uuid
+);
 
 -- Anonymous callers must have neither direct event reads nor legacy RPC
 -- execution. Each statement must fail at the privilege boundary.
@@ -45,7 +69,7 @@ begin
 
   begin
     perform public.set_event_rsvp(
-      event_id => 'security-cutoff-v2-event',
+      event_id => 'security-cutoff-rsvp-event',
       participant_id => 'legacy-participant',
       status => 'going'
     );
@@ -126,8 +150,17 @@ begin
     raise exception 'authenticated v2 create RPC failed';
   end if;
 
+  select attendee_count, rsvp_status into strict projected
+  from public.get_events_for_current_user()
+  where id = 'security-cutoff-v2-event';
+
+  if projected.attendee_count is distinct from 1
+    or projected.rsvp_status is distinct from 'going' then
+    raise exception 'authenticated v2 event create/read RPC failed';
+  end if;
+
   if public.set_event_rsvp_v2(
-    event_id => 'security-cutoff-v2-event',
+    event_id => 'security-cutoff-rsvp-event',
     status => 'interested'
   ) is distinct from 'interested' then
     raise exception 'authenticated v2 RSVP RPC failed';
@@ -135,11 +168,11 @@ begin
 
   select attendee_count, rsvp_status into strict projected
   from public.get_events_for_current_user()
-  where id = 'security-cutoff-v2-event';
+  where id = 'security-cutoff-rsvp-event';
 
   if projected.attendee_count is distinct from 0
     or projected.rsvp_status is distinct from 'interested' then
-    raise exception 'authenticated v2 event read RPC failed';
+    raise exception 'authenticated v2 RSVP projection failed';
   end if;
 
   begin
@@ -172,7 +205,7 @@ begin
       participant_id,
       status
     ) values (
-      'security-cutoff-v2-event',
+      'security-cutoff-rsvp-event',
       'security-cutoff-direct-write',
       'going'
     );
@@ -191,5 +224,83 @@ end;
 $$;
 
 reset role;
+
+-- Retained legacy rows must remain stored but must not contribute to the
+-- authenticated v2 attendee count. The authenticated fixture RSVP currently
+-- exists as Interested; add a legacy Going row, then change the authenticated
+-- user back to Going so the table contains two Going rows from different
+-- identity eras.
+insert into public.event_rsvps (
+  event_id,
+  participant_id,
+  status
+) values (
+  'security-cutoff-rsvp-event',
+  'retained-legacy-participant',
+  'going'
+);
+
+select pg_catalog.set_config(
+  'request.jwt.claim.sub',
+  '20000000-0000-4000-8000-000000000001',
+  true
+);
+set local role authenticated;
+
+do $$
+declare
+  projected record;
+begin
+  if public.set_event_rsvp_v2(
+    event_id => 'security-cutoff-rsvp-event',
+    status => 'going'
+  ) is distinct from 'going' then
+    raise exception 'authenticated RSVP fixture did not return to going';
+  end if;
+
+  select attendee_count, rsvp_status into strict projected
+  from public.get_events_for_current_user()
+  where id = 'security-cutoff-rsvp-event';
+
+  if projected.attendee_count is distinct from 1 then
+    raise exception 'v2 attendee count included a retained legacy RSVP';
+  end if;
+
+  if projected.rsvp_status is distinct from 'going' then
+    raise exception 'current authenticated user RSVP projection is incorrect';
+  end if;
+end;
+$$;
+
+reset role;
+
+do $$
+declare
+  legacy_going_rows integer;
+  authenticated_going_rows integer;
+  all_going_rows integer;
+begin
+  select
+    count(*) filter (
+      where user_id is null
+        and participant_id = 'retained-legacy-participant'
+        and status = 'going'
+    ),
+    count(*) filter (
+      where user_id = '20000000-0000-4000-8000-000000000001'::uuid
+        and status = 'going'
+    ),
+    count(*) filter (where status = 'going')
+  into legacy_going_rows, authenticated_going_rows, all_going_rows
+  from public.event_rsvps
+  where event_id = 'security-cutoff-rsvp-event';
+
+  if legacy_going_rows is distinct from 1
+    or authenticated_going_rows is distinct from 1
+    or all_going_rows is distinct from 2 then
+    raise exception 'mixed legacy/authenticated RSVP fixture was not retained';
+  end if;
+end;
+$$;
 
 rollback;
