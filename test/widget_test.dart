@@ -41,6 +41,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Throttle Meet'), findsOneWidget);
+    expect(find.text('Discover local automotive events'), findsOneWidget);
     expect(find.text('Spring Canyon Run'), findsOneWidget);
     expect(find.text('Create Event'), findsOneWidget);
   });
@@ -207,6 +208,28 @@ void main() {
         ),
       ),
     );
+
+    final attendanceLabel = tester.widget<Text>(find.text('Attendance'));
+    final interestedLabel = tester.widget<Text>(find.text('Interested'));
+    expect(attendanceLabel.maxLines, 1);
+    expect(attendanceLabel.softWrap, isFalse);
+    expect(interestedLabel.maxLines, 1);
+    expect(interestedLabel.softWrap, isFalse);
+
+    final metadataCard = find.ancestor(
+      of: find.text('Attendance'),
+      matching: find.byType(Card),
+    );
+    final aboutCard = find.ancestor(
+      of: find.text('About this event'),
+      matching: find.byType(Card),
+    );
+    final rsvpCard = find.ancestor(
+      of: find.text('RSVP'),
+      matching: find.byType(Card),
+    );
+    expect(tester.getSize(aboutCard).width, tester.getSize(metadataCard).width);
+    expect(tester.getSize(rsvpCard).width, tester.getSize(metadataCard).width);
 
     expect(find.byTooltip('Edit event'), findsOneWidget);
     expect(find.byTooltip('Cancel event'), findsOneWidget);

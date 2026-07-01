@@ -189,12 +189,12 @@ class _AttendeeCount extends StatelessWidget {
 
     return Row(
       children: [
-        Icon(Icons.group_outlined, size: 18, color: colorScheme.primary),
+        Icon(Icons.group_outlined, size: 18, color: colorScheme.secondary),
         const SizedBox(width: 7),
         Text(
           label,
           style: theme.textTheme.labelMedium?.copyWith(
-            color: colorScheme.onSurface,
+            color: colorScheme.onSurfaceVariant,
             fontWeight: FontWeight.w600,
           ),
         ),

@@ -33,7 +33,7 @@ class _EventsListScreenState extends State<EventsListScreen> {
       builder: (context, _) {
         return Scaffold(
           appBar: AppBar(
-            title: const Text('Throttle Meet'),
+            title: const _EventsHeaderTitle(),
             actions: [
               IconButton(
                 onPressed: () {
@@ -72,6 +72,39 @@ class _EventsListScreenState extends State<EventsListScreen> {
               : _EventsListBody(controller: controller),
         );
       },
+    );
+  }
+}
+
+class _EventsHeaderTitle extends StatelessWidget {
+  const _EventsHeaderTitle();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Throttle Meet',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        Text(
+          'Discover local automotive events',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: theme.textTheme.labelSmall?.copyWith(
+            color: colorScheme.onPrimary.withValues(alpha: 0.72),
+            fontWeight: FontWeight.w400,
+            letterSpacing: 0.1,
+            height: 1.15,
+          ),
+        ),
+      ],
     );
   }
 }

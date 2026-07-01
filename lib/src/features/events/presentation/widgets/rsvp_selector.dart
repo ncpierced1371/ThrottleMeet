@@ -22,7 +22,13 @@ class RsvpSelector extends StatelessWidget {
           .map(
             (status) => ButtonSegment<RsvpStatus>(
               value: status,
-              label: Text(status.label, textAlign: TextAlign.center),
+              label: Text(
+                status.label,
+                maxLines: 1,
+                softWrap: false,
+                overflow: TextOverflow.fade,
+                textAlign: TextAlign.center,
+              ),
             ),
           )
           .toList(),
@@ -71,10 +77,10 @@ class RsvpSelector extends StatelessWidget {
         textStyle: WidgetStatePropertyAll(
           Theme.of(
             context,
-          ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w600),
+          ).textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w600),
         ),
         padding: const WidgetStatePropertyAll(
-          EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+          EdgeInsets.symmetric(horizontal: 6, vertical: 12),
         ),
       ),
     );
