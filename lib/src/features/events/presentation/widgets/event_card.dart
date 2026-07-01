@@ -12,59 +12,91 @@ class EventCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
 
     return Card(
+      clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(20),
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
+        child: Stack(
+          children: [
+            Positioned(
+              left: 0,
+              top: 0,
+              bottom: 0,
+              width: 4,
+              child: ColoredBox(color: colorScheme.secondary),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 20, 20, 20),
+              child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(event.title, style: theme.textTheme.titleLarge),
-                        const SizedBox(height: 8),
-                        Text(
-                          DateTimeFormatter.shortDateTime(
-                            context,
-                            event.startTime,
-                          ),
-                          style: theme.textTheme.bodyMedium,
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              event.title,
+                              style: theme.textTheme.titleLarge?.copyWith(
+                                color: colorScheme.onSurface,
+                                fontWeight: FontWeight.w600,
+                                height: 1.2,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              DateTimeFormatter.shortDateTime(
+                                context,
+                                event.startTime,
+                              ),
+                              style: theme.textTheme.labelLarge?.copyWith(
+                                color: colorScheme.secondary,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
                         ),
+                      ),
+                      if (event.viewerRsvpStatus != null) ...[
+                        const SizedBox(width: 12),
+                        Chip(label: Text(event.viewerRsvpStatus!.label)),
                       ],
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    event.description,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                      height: 1.45,
                     ),
                   ),
-                  if (event.viewerRsvpStatus != null)
-                    Chip(label: Text(event.viewerRsvpStatus!.label)),
-                ],
-              ),
-              const SizedBox(height: 16),
-              Text(
-                event.description,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-              const SizedBox(height: 16),
-              Wrap(
-                spacing: 12,
-                runSpacing: 8,
-                children: [
-                  _MetaPill(
-                    icon: Icons.place_outlined,
-                    label: event.locationName,
+                  const SizedBox(height: 18),
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 8,
+                    children: [
+                      _MetaPill(
+                        icon: Icons.place_outlined,
+                        label: event.locationName,
+                      ),
+                      _MetaPill(
+                        icon: Icons.person_outline,
+                        label: event.hostName,
+                      ),
+                    ],
                   ),
-                  _MetaPill(icon: Icons.person_outline, label: event.hostName),
                 ],
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -79,15 +111,29 @@ class _MetaPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        color: colorScheme.secondaryContainer,
         borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: colorScheme.outlineVariant),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
-        children: [Icon(icon, size: 18), const SizedBox(width: 6), Text(label)],
+        children: [
+          Icon(icon, size: 17, color: colorScheme.secondary),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: colorScheme.onSecondaryContainer,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
       ),
     );
   }

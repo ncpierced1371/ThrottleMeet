@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/app_empty_state.dart';
 import '../../../auth/presentation/controllers/auth_bootstrap_controller.dart';
 import '../../../diagnostics/presentation/screens/diagnostics_screen.dart';
@@ -151,17 +152,27 @@ class _CachedEventsBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
+    final semanticColors = AppSemanticColors.of(context);
 
     return Material(
-      color: colorScheme.secondaryContainer,
-      child: const Padding(
-        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      color: semanticColors.warningContainer,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         child: Row(
           children: [
-            Icon(Icons.offline_pin_outlined, size: 18),
-            SizedBox(width: 8),
-            Text('Showing saved events'),
+            Icon(
+              Icons.offline_pin_outlined,
+              size: 19,
+              color: semanticColors.warning,
+            ),
+            const SizedBox(width: 10),
+            Text(
+              'Showing saved events',
+              style: TextStyle(
+                color: semanticColors.onWarningContainer,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
           ],
         ),
       ),
@@ -181,17 +192,25 @@ class _EventsLoadErrorBanner extends StatelessWidget {
     return Material(
       color: colorScheme.errorContainer,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         child: Row(
           children: [
+            Icon(Icons.error_outline, size: 19, color: colorScheme.error),
+            const SizedBox(width: 10),
             Expanded(
               child: Text(
                 controller.errorMessage!,
-                style: TextStyle(color: colorScheme.onErrorContainer),
+                style: TextStyle(
+                  color: colorScheme.onErrorContainer,
+                  fontWeight: FontWeight.w500,
+                ),
               ),
             ),
             TextButton(
               onPressed: controller.loadEvents,
+              style: TextButton.styleFrom(
+                foregroundColor: colorScheme.onErrorContainer,
+              ),
               child: const Text('Retry'),
             ),
           ],
