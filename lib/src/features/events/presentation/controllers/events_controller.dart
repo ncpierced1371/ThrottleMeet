@@ -1,15 +1,20 @@
 import 'package:flutter/foundation.dart';
 
 import '../../../../core/errors/app_exception.dart';
+import '../../../../core/logging/app_logger.dart';
 import '../../domain/entities/event.dart';
 import '../../domain/entities/rsvp_status.dart';
 import '../../domain/repositories/events_repository.dart';
 
 class EventsController extends ChangeNotifier {
-  EventsController({required EventsRepository repository})
-    : _repository = repository;
+  EventsController({
+    required EventsRepository repository,
+    DateTime Function()? now,
+  }) : _repository = repository,
+       _now = now ?? DateTime.now;
 
   final EventsRepository _repository;
+  final DateTime Function() _now;
 
   List<Event> _events = [];
   bool _isLoading = false;
@@ -17,6 +22,9 @@ class EventsController extends ChangeNotifier {
   AppErrorType? _errorType;
   bool _isShowingCachedEvents = false;
   DateTime? _cachedAt;
+  int _cachedEventCount = 0;
+  DateTime? _latestSuccessfulEventRefreshAt;
+  DateTime? _latestCacheWriteAt;
   int _loadGeneration = 0;
   Future<void> _cacheWriteQueue = Future.value();
 
@@ -26,12 +34,17 @@ class EventsController extends ChangeNotifier {
   AppErrorType? get errorType => _errorType;
   bool get isShowingCachedEvents => _isShowingCachedEvents;
   DateTime? get cachedAt => _cachedAt;
+  int get cachedEventCount => _cachedEventCount;
+  DateTime? get latestSuccessfulEventRefreshAt =>
+      _latestSuccessfulEventRefreshAt;
+  DateTime? get latestCacheWriteAt => _latestCacheWriteAt;
 
   Future<bool> loadEvents() async {
     final generation = ++_loadGeneration;
     _isLoading = true;
     _errorMessage = null;
     _errorType = null;
+    AppLogger.info('event.refresh.started', fields: {'generation': generation});
     notifyListeners();
 
     try {
@@ -45,13 +58,19 @@ class EventsController extends ChangeNotifier {
             _events = snapshot.events;
             _isShowingCachedEvents = true;
             _cachedAt = snapshot.cachedAt;
+            _cachedEventCount = snapshot.events.length;
+            _latestCacheWriteAt = snapshot.cachedAt;
+            AppLogger.info(
+              'event.cache.loaded',
+              fields: {'event_count': snapshot.events.length},
+            );
             notifyListeners();
           }
         } catch (error) {
           if (!_isCurrentLoad(generation)) {
             return false;
           }
-          debugPrint('EventsController cached event load error: $error');
+          AppLogger.warning('event.cache.read_failed', error: error);
         }
       }
 
@@ -63,15 +82,25 @@ class EventsController extends ChangeNotifier {
       _events = events;
       _isShowingCachedEvents = false;
       _cachedAt = null;
+      _latestSuccessfulEventRefreshAt = _now().toUtc();
+      AppLogger.info(
+        'event.refresh.succeeded',
+        fields: {'event_count': events.length, 'generation': generation},
+      );
       notifyListeners();
 
       await _queueCacheWrite(events);
       return _isCurrentLoad(generation);
-    } catch (error) {
+    } catch (error, stackTrace) {
       if (!_isCurrentLoad(generation)) {
         return false;
       }
-      debugPrint('EventsController.loadEvents error: $error');
+      AppLogger.error(
+        'event.refresh.failed',
+        fields: {'generation': generation},
+        error: error,
+        stackTrace: stackTrace,
+      );
       _recordError(error, fallbackMessage: 'Unable to load events.');
       return false;
     } finally {
@@ -90,8 +119,15 @@ class EventsController extends ChangeNotifier {
       await previousWrite;
       try {
         await _repository.cacheEvents(events);
+        _cachedEventCount = events.length;
+        _latestCacheWriteAt = _now().toUtc();
+        AppLogger.info(
+          'event.cache.write_succeeded',
+          fields: {'event_count': events.length},
+        );
+        notifyListeners();
       } catch (error) {
-        debugPrint('EventsController event cache write error: $error');
+        AppLogger.warning('event.cache.write_failed', error: error);
       }
     }();
     _cacheWriteQueue = write;
@@ -107,10 +143,20 @@ class EventsController extends ChangeNotifier {
   }
 
   Future<bool> createNewEvent(Event event) async {
+    AppLogger.info('event.create.started', fields: {'event_id': event.id});
     try {
       await _repository.createEvent(event);
-    } catch (error) {
-      debugPrint('EventsController.createNewEvent error: $error');
+      AppLogger.info(
+        'event.create.write_succeeded',
+        fields: {'event_id': event.id},
+      );
+    } catch (error, stackTrace) {
+      AppLogger.error(
+        'event.create.failed',
+        fields: {'event_id': event.id},
+        error: error,
+        stackTrace: stackTrace,
+      );
       _recordError(error, fallbackMessage: 'Unable to create event.');
       notifyListeners();
       return false;
@@ -120,10 +166,20 @@ class EventsController extends ChangeNotifier {
   }
 
   Future<bool> updateEvent(Event event) async {
+    AppLogger.info('event.edit.started', fields: {'event_id': event.id});
     try {
       await _repository.updateEvent(event);
-    } catch (error) {
-      debugPrint('EventsController.updateEvent error: $error');
+      AppLogger.info(
+        'event.edit.write_succeeded',
+        fields: {'event_id': event.id},
+      );
+    } catch (error, stackTrace) {
+      AppLogger.error(
+        'event.edit.failed',
+        fields: {'event_id': event.id},
+        error: error,
+        stackTrace: stackTrace,
+      );
       _recordError(error, fallbackMessage: 'Unable to update event.');
       notifyListeners();
       return false;
@@ -133,10 +189,20 @@ class EventsController extends ChangeNotifier {
   }
 
   Future<bool> cancelEvent(String eventId) async {
+    AppLogger.info('event.cancel.started', fields: {'event_id': eventId});
     try {
       await _repository.cancelEvent(eventId);
-    } catch (error) {
-      debugPrint('EventsController.cancelEvent error: $error');
+      AppLogger.info(
+        'event.cancel.write_succeeded',
+        fields: {'event_id': eventId},
+      );
+    } catch (error, stackTrace) {
+      AppLogger.error(
+        'event.cancel.failed',
+        fields: {'event_id': eventId},
+        error: error,
+        stackTrace: stackTrace,
+      );
       _recordError(error, fallbackMessage: 'Unable to cancel event.');
       notifyListeners();
       return false;
@@ -149,10 +215,23 @@ class EventsController extends ChangeNotifier {
     required String eventId,
     required RsvpStatus status,
   }) async {
+    AppLogger.info(
+      'event.rsvp_update.started',
+      fields: {'event_id': eventId, 'status': status.name},
+    );
     try {
       await _repository.updateRsvp(eventId: eventId, status: status);
-    } catch (error) {
-      debugPrint('EventsController.updateRsvp error: $error');
+      AppLogger.info(
+        'event.rsvp_update.write_succeeded',
+        fields: {'event_id': eventId, 'status': status.name},
+      );
+    } catch (error, stackTrace) {
+      AppLogger.error(
+        'event.rsvp_update.failed',
+        fields: {'event_id': eventId, 'status': status.name},
+        error: error,
+        stackTrace: stackTrace,
+      );
       _recordError(error, fallbackMessage: 'Unable to update RSVP.');
       notifyListeners();
       return false;

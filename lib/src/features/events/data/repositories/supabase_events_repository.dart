@@ -1,7 +1,7 @@
-import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../../core/errors/app_exception.dart';
+import '../../../../core/logging/app_logger.dart';
 import '../../../auth/data/supabase_auth_gateway.dart';
 import '../../../auth/domain/repositories/auth_session_provider.dart';
 import '../../domain/entities/event.dart';
@@ -59,7 +59,8 @@ class SupabaseEventsRepository implements EventsRepository {
         EventSnapshot(events: events, cachedAt: _now().toUtc()),
       );
     } catch (error) {
-      debugPrint('Unable to cache refreshed events: $error');
+      AppLogger.warning('event.cache.repository_write_failed', error: error);
+      rethrow;
     }
   }
 
@@ -91,8 +92,6 @@ class SupabaseEventsRepository implements EventsRepository {
           '$confirmation',
         );
       }
-
-      debugPrint('SupabaseEventsRepository.createEvent success: ${event.id}');
     });
   }
 
@@ -168,8 +167,9 @@ class SupabaseEventsRepository implements EventsRepository {
       _requireAuthenticatedUserId();
       final data = await _client.rpc('get_events_for_current_user').select();
 
-      debugPrint(
-        'SupabaseEventsRepository.getEvents rows returned: ${data.length}',
+      AppLogger.info(
+        'event.repository_refresh_received',
+        fields: {'event_count': data.length},
       );
 
       final events = data
@@ -218,8 +218,11 @@ class SupabaseEventsRepository implements EventsRepository {
       return await Future<T>.sync(operation).timeout(_requestTimeout);
     } catch (error, stackTrace) {
       final appException = SupabaseErrorMapper.map(error);
-      debugPrint(
-        'SupabaseEventsRepository.$operationName error: $appException',
+      AppLogger.error(
+        'event.repository_operation_failed',
+        fields: {'operation': operationName},
+        error: appException,
+        stackTrace: stackTrace,
       );
       Error.throwWithStackTrace(appException, stackTrace);
     }

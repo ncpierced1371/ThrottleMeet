@@ -1,15 +1,22 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/widgets/app_empty_state.dart';
+import '../../../auth/presentation/controllers/auth_bootstrap_controller.dart';
+import '../../../diagnostics/presentation/screens/diagnostics_screen.dart';
 import '../controllers/events_controller.dart';
 import 'create_event_screen.dart';
 import 'event_detail_screen.dart';
 import '../widgets/event_card.dart';
 
 class EventsListScreen extends StatefulWidget {
-  const EventsListScreen({super.key, required this.controller});
+  const EventsListScreen({
+    super.key,
+    required this.controller,
+    this.authController,
+  });
 
   final EventsController controller;
+  final AuthBootstrapController? authController;
 
   @override
   State<EventsListScreen> createState() => _EventsListScreenState();
@@ -27,6 +34,21 @@ class _EventsListScreenState extends State<EventsListScreen> {
           appBar: AppBar(
             title: const Text('ThrottleMeet'),
             actions: [
+              if (widget.authController != null)
+                IconButton(
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => DiagnosticsScreen(
+                          authController: widget.authController!,
+                          eventsController: controller,
+                        ),
+                      ),
+                    );
+                  },
+                  tooltip: 'Settings and diagnostics',
+                  icon: const Icon(Icons.info_outline),
+                ),
               IconButton(
                 onPressed: controller.isLoading ? null : controller.loadEvents,
                 tooltip: 'Refresh events',

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+import '../../../../core/logging/app_logger.dart';
 import '../../domain/entities/user_profile.dart';
 import '../../domain/repositories/auth_gateway.dart';
 import '../../domain/repositories/profile_repository.dart';
@@ -49,10 +50,18 @@ class AuthBootstrapController extends ChangeNotifier {
     _profile = null;
     _authError = null;
     _profileError = null;
+    AppLogger.info(
+      'auth.bootstrap.started',
+      fields: {'generation': generation},
+    );
     notifyListeners();
 
     try {
       final existingUserId = _authGateway.currentUserId;
+      AppLogger.info(
+        'auth.bootstrap.session_checked',
+        fields: {'existing_session': existingUserId != null},
+      );
       final authenticatedUserId =
           existingUserId ?? await _authGateway.signInAnonymously();
 
@@ -66,14 +75,22 @@ class AuthBootstrapController extends ChangeNotifier {
 
       _userId = authenticatedUserId;
       _state = AuthBootstrapState.ready;
+      AppLogger.info(
+        'auth.bootstrap.ready',
+        fields: {'restored_session': existingUserId != null},
+      );
       notifyListeners();
 
       unawaited(syncProfile());
-    } catch (error) {
+    } catch (error, stackTrace) {
       if (generation != _bootstrapGeneration) {
         return;
       }
-      debugPrint('AuthBootstrapController.bootstrap error: $error');
+      AppLogger.error(
+        'auth.bootstrap.failed',
+        error: error,
+        stackTrace: stackTrace,
+      );
       _authError = error;
       _state = AuthBootstrapState.error;
       notifyListeners();
@@ -91,6 +108,7 @@ class AuthBootstrapController extends ChangeNotifier {
     final generation = ++_profileSyncGeneration;
     _profileSyncStatus = ProfileSyncStatus.syncing;
     _profileError = null;
+    AppLogger.info('profile.sync.started', fields: {'generation': generation});
     notifyListeners();
 
     try {
@@ -109,12 +127,21 @@ class AuthBootstrapController extends ChangeNotifier {
 
       _profile = profile;
       _profileSyncStatus = ProfileSyncStatus.ready;
+      AppLogger.info(
+        'profile.sync.succeeded',
+        fields: {'generation': generation},
+      );
       notifyListeners();
-    } catch (error) {
+    } catch (error, stackTrace) {
       if (!_isCurrentProfileSync(generation, authenticatedUserId)) {
         return;
       }
-      debugPrint('AuthBootstrapController.syncProfile error: $error');
+      AppLogger.error(
+        'profile.sync.failed',
+        fields: {'generation': generation},
+        error: error,
+        stackTrace: stackTrace,
+      );
       _profileError = error;
       _profileSyncStatus = ProfileSyncStatus.error;
       notifyListeners();

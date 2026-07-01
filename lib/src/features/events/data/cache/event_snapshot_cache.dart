@@ -1,8 +1,8 @@
 import 'dart:convert';
 
-import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../../../core/logging/app_logger.dart';
 import '../../domain/entities/event_snapshot.dart';
 import '../models/event_record.dart';
 
@@ -58,7 +58,7 @@ class SharedPreferencesEventSnapshotCache implements EventSnapshotCache {
 
       return EventSnapshot(events: events, cachedAt: cachedAt.toUtc());
     } catch (error) {
-      debugPrint('Ignoring invalid cached event snapshot: $error');
+      AppLogger.warning('event.cache.invalid_snapshot', error: error);
       await preferences.remove(key);
       return null;
     }

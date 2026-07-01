@@ -73,6 +73,39 @@ void main() {
       expect(controller.cachedAt, isNull);
       expect(controller.errorMessage, 'Unable to load events.');
     });
+
+    test(
+      'tracks cached count and successful refresh/write timestamps',
+      () async {
+        final pendingLoad = Completer<List<Event>>();
+        final repository = _FakeEventsRepository(
+          cachedSnapshot: EventSnapshot(
+            events: [_existingEvent],
+            cachedAt: cachedAt,
+          ),
+        )..pendingLoad = pendingLoad;
+        final now = DateTime.utc(2026, 6, 30, 13);
+        final controller = EventsController(
+          repository: repository,
+          now: () => now,
+        );
+        addTearDown(controller.dispose);
+
+        final load = controller.loadEvents();
+        await Future<void>.delayed(Duration.zero);
+
+        expect(controller.cachedEventCount, 1);
+        expect(controller.latestCacheWriteAt, cachedAt);
+        expect(controller.latestSuccessfulEventRefreshAt, isNull);
+
+        pendingLoad.complete([_newEvent]);
+        expect(await load, isTrue);
+
+        expect(controller.cachedEventCount, 1);
+        expect(controller.latestSuccessfulEventRefreshAt, now);
+        expect(controller.latestCacheWriteAt, now);
+      },
+    );
   });
 
   group('EventsController refresh race protection', () {

@@ -139,6 +139,7 @@ class _ThrottleMeetAppState extends State<ThrottleMeetApp> {
         AuthBootstrapState.initializing => const _AuthInitializingScreen(),
         AuthBootstrapState.ready => EventsListScreen(
           controller: _eventsController!,
+          authController: _authBootstrapController,
         ),
         AuthBootstrapState.error => _AuthErrorScreen(
           onRetry: _authBootstrapController.bootstrap,
