@@ -176,6 +176,142 @@ void main() {
 
     expect(find.text('RSVP updated to Going.'), findsOneWidget);
   });
+
+  testWidgets('shows owner controls only for an owned active event', (
+    tester,
+  ) async {
+    final ownedRepository = _ToggleEventsRepository(
+      events: [_lifecycleEvent(isOwnedByViewer: true)],
+    );
+    final ownedController = EventsController(repository: ownedRepository);
+    addTearDown(ownedController.dispose);
+    await ownedController.loadEvents();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EventDetailScreen(
+          controller: ownedController,
+          eventId: 'lifecycle-event',
+        ),
+      ),
+    );
+
+    expect(find.byTooltip('Edit event'), findsOneWidget);
+    expect(find.byTooltip('Cancel event'), findsOneWidget);
+
+    final nonOwnerRepository = _ToggleEventsRepository(
+      events: [_lifecycleEvent()],
+    );
+    final nonOwnerController = EventsController(repository: nonOwnerRepository);
+    addTearDown(nonOwnerController.dispose);
+    await nonOwnerController.loadEvents();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EventDetailScreen(
+          controller: nonOwnerController,
+          eventId: 'lifecycle-event',
+        ),
+      ),
+    );
+
+    expect(find.byTooltip('Edit event'), findsNothing);
+    expect(find.byTooltip('Cancel event'), findsNothing);
+  });
+
+  testWidgets('cancelled events show a banner and disable RSVP', (
+    tester,
+  ) async {
+    final repository = _ToggleEventsRepository(
+      events: [
+        _lifecycleEvent(isOwnedByViewer: true, status: EventStatus.cancelled),
+      ],
+    );
+    final controller = EventsController(repository: repository);
+    addTearDown(controller.dispose);
+    await controller.loadEvents();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EventDetailScreen(
+          controller: controller,
+          eventId: 'lifecycle-event',
+        ),
+      ),
+    );
+
+    expect(find.text('Cancelled event'), findsOneWidget);
+    expect(find.byTooltip('Edit event'), findsNothing);
+    expect(find.byTooltip('Cancel event'), findsNothing);
+    expect(
+      tester.widgetList<ChoiceChip>(find.byType(ChoiceChip)),
+      everyElement(
+        isA<ChoiceChip>().having(
+          (chip) => chip.onSelected,
+          'onSelected',
+          isNull,
+        ),
+      ),
+    );
+  });
+
+  testWidgets('cancel requires confirmation before invoking controller', (
+    tester,
+  ) async {
+    final repository = _ToggleEventsRepository(
+      events: [_lifecycleEvent(isOwnedByViewer: true)],
+    );
+    final controller = EventsController(repository: repository);
+    addTearDown(controller.dispose);
+    await controller.loadEvents();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EventDetailScreen(
+          controller: controller,
+          eventId: 'lifecycle-event',
+        ),
+      ),
+    );
+
+    await tester.tap(find.byTooltip('Cancel event'));
+    await tester.pumpAndSettle();
+    expect(find.text('Cancel this event?'), findsOneWidget);
+
+    await tester.tap(find.text('Keep Event'));
+    await tester.pumpAndSettle();
+    expect(repository.cancelCallCount, 0);
+
+    await tester.tap(find.byTooltip('Cancel event'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Cancel Event'));
+    await tester.pumpAndSettle();
+
+    expect(repository.cancelCallCount, 1);
+    expect(find.text('Cancelled event'), findsOneWidget);
+  });
+}
+
+Event _lifecycleEvent({
+  bool isOwnedByViewer = false,
+  EventStatus status = EventStatus.active,
+}) {
+  return Event(
+    id: 'lifecycle-event',
+    title: 'Lifecycle Meet',
+    description: 'An event with owner lifecycle controls.',
+    locationName: 'Test Garage',
+    hostName: 'Test Host',
+    startTime: DateTime(2026, 7, 1, 18),
+    endTime: DateTime(2026, 7, 1, 20),
+    attendeeCount: 2,
+    viewerRsvpStatus: RsvpStatus.going,
+    status: status,
+    isOwnedByViewer: isOwnedByViewer,
+    cancelledAt: status == EventStatus.cancelled
+        ? DateTime.utc(2026, 6, 30)
+        : null,
+  );
 }
 
 class _ToggleEventsRepository implements EventsRepository {
@@ -185,6 +321,7 @@ class _ToggleEventsRepository implements EventsRepository {
   bool shouldFail = false;
   final List<Event> _events;
   final EventSnapshot? cachedSnapshot;
+  int cancelCallCount = 0;
 
   @override
   Future<EventSnapshot?> getCachedEvents() async => cachedSnapshot;
@@ -195,6 +332,26 @@ class _ToggleEventsRepository implements EventsRepository {
   @override
   Future<void> createEvent(Event event) async {
     _events.add(event);
+  }
+
+  @override
+  Future<void> updateEvent(Event event) async {
+    final index = _events.indexWhere((existing) => existing.id == event.id);
+    if (index != -1) {
+      _events[index] = event;
+    }
+  }
+
+  @override
+  Future<void> cancelEvent(String eventId) async {
+    cancelCallCount += 1;
+    final index = _events.indexWhere((event) => event.id == eventId);
+    if (index != -1) {
+      _events[index] = _events[index].copyWith(
+        status: EventStatus.cancelled,
+        cancelledAt: DateTime.utc(2026, 6, 30),
+      );
+    }
   }
 
   @override
@@ -250,6 +407,12 @@ class _PendingRsvpRepository implements EventsRepository {
 
   @override
   Future<void> createEvent(Event event) async {}
+
+  @override
+  Future<void> updateEvent(Event event) async {}
+
+  @override
+  Future<void> cancelEvent(String eventId) async {}
 
   @override
   Future<Event?> getEventById(String id) async => id == event.id ? event : null;

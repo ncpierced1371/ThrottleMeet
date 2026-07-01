@@ -1,8 +1,48 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:throttlemeet_v2/src/features/events/data/models/event_record.dart';
+import 'package:throttlemeet_v2/src/features/events/domain/entities/event.dart';
 import 'package:throttlemeet_v2/src/features/events/domain/entities/rsvp_status.dart';
 
 void main() {
+  test('maps lifecycle status, ownership, and cancellation time', () {
+    final event = EventRecord.fromMap({
+      'id': 'cancelled-event',
+      'title': 'Cancelled Meet',
+      'description': 'A cancelled event.',
+      'location_name': 'Test Garage',
+      'host_name': 'Test Host',
+      'start_time': '2026-07-01T18:00:00Z',
+      'end_time': '2026-07-01T20:00:00Z',
+      'attendee_count': 7,
+      'rsvp_status': 'going',
+      'status': 'cancelled',
+      'is_owner': true,
+      'cancelled_at': '2026-06-30T12:00:00Z',
+    }).toEntity();
+
+    expect(event.status, EventStatus.cancelled);
+    expect(event.isOwnedByViewer, isTrue);
+    expect(event.cancelledAt, DateTime.utc(2026, 6, 30, 12));
+  });
+
+  test('legacy records default to active non-owner lifecycle state', () {
+    final event = EventRecord.fromMap({
+      'id': 'legacy-event',
+      'title': 'Legacy Meet',
+      'description': 'An old cached event.',
+      'location_name': 'Test Garage',
+      'host_name': 'Test Host',
+      'start_time': '2026-07-01T18:00:00Z',
+      'end_time': '2026-07-01T20:00:00Z',
+      'attendee_count': 2,
+      'rsvp_status': null,
+    }).toEntity();
+
+    expect(event.status, EventStatus.active);
+    expect(event.isOwnedByViewer, isFalse);
+    expect(event.cancelledAt, isNull);
+  });
+
   test('maps a null viewer RSVP without changing attendee count', () {
     final event = EventRecord.fromMap({
       'id': 'event-1',

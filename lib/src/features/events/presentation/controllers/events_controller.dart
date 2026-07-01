@@ -119,6 +119,32 @@ class EventsController extends ChangeNotifier {
     return loadEvents();
   }
 
+  Future<bool> updateEvent(Event event) async {
+    try {
+      await _repository.updateEvent(event);
+    } catch (error) {
+      debugPrint('EventsController.updateEvent error: $error');
+      _recordError(error, fallbackMessage: 'Unable to update event.');
+      notifyListeners();
+      return false;
+    }
+
+    return loadEvents();
+  }
+
+  Future<bool> cancelEvent(String eventId) async {
+    try {
+      await _repository.cancelEvent(eventId);
+    } catch (error) {
+      debugPrint('EventsController.cancelEvent error: $error');
+      _recordError(error, fallbackMessage: 'Unable to cancel event.');
+      notifyListeners();
+      return false;
+    }
+
+    return loadEvents();
+  }
+
   Future<bool> updateRsvp({
     required String eventId,
     required RsvpStatus status,

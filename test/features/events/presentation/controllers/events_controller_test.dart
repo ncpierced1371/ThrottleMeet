@@ -261,6 +261,118 @@ void main() {
       },
     );
 
+    test('updateEvent write failure preserves successful state', () async {
+      final repository = _FakeEventsRepository(events: [_existingEvent]);
+      final controller = EventsController(repository: repository);
+      addTearDown(controller.dispose);
+      await controller.loadEvents();
+      final successfulEvents = controller.events;
+      repository.updateEventError = _failure;
+
+      final succeeded = await controller.updateEvent(
+        _existingEvent.copyWith(title: 'Updated Meet'),
+      );
+
+      expect(succeeded, isFalse);
+      expect(controller.errorMessage, 'Unable to update event.');
+      expect(controller.events, same(successfulEvents));
+      expect(controller.events.single.title, 'Existing Meet');
+      expect(repository.loadCallCount, 1);
+    });
+
+    test('cancelEvent write failure preserves successful state', () async {
+      final repository = _FakeEventsRepository(events: [_existingEvent]);
+      final controller = EventsController(repository: repository);
+      addTearDown(controller.dispose);
+      await controller.loadEvents();
+      final successfulEvents = controller.events;
+      repository.cancelError = _failure;
+
+      final succeeded = await controller.cancelEvent(_existingEvent.id);
+
+      expect(succeeded, isFalse);
+      expect(controller.errorMessage, 'Unable to cancel event.');
+      expect(controller.events, same(successfulEvents));
+      expect(controller.events.single.status, EventStatus.active);
+      expect(repository.loadCallCount, 1);
+    });
+
+    test(
+      'successful edit with failed refresh preserves visible events',
+      () async {
+        final repository = _FakeEventsRepository(events: [_existingEvent]);
+        final controller = EventsController(repository: repository);
+        addTearDown(controller.dispose);
+        await controller.loadEvents();
+        final successfulEvents = controller.events;
+        repository.loadError = _failure;
+
+        final succeeded = await controller.updateEvent(
+          _existingEvent.copyWith(title: 'Updated Meet'),
+        );
+
+        expect(succeeded, isFalse);
+        expect(controller.errorMessage, 'Unable to load events.');
+        expect(controller.events, same(successfulEvents));
+        expect(controller.events.single.title, 'Existing Meet');
+        expect(repository.loadCallCount, 2);
+      },
+    );
+
+    test(
+      'successful cancel with failed refresh preserves visible events',
+      () async {
+        final repository = _FakeEventsRepository(events: [_existingEvent]);
+        final controller = EventsController(repository: repository);
+        addTearDown(controller.dispose);
+        await controller.loadEvents();
+        final successfulEvents = controller.events;
+        repository.loadError = _failure;
+
+        final succeeded = await controller.cancelEvent(_existingEvent.id);
+
+        expect(succeeded, isFalse);
+        expect(controller.errorMessage, 'Unable to load events.');
+        expect(controller.events, same(successfulEvents));
+        expect(controller.events.single.status, EventStatus.active);
+        expect(repository.loadCallCount, 2);
+      },
+    );
+
+    test(
+      'successful edit and refresh returns true with refreshed event',
+      () async {
+        final repository = _FakeEventsRepository(events: [_existingEvent]);
+        final controller = EventsController(repository: repository);
+        addTearDown(controller.dispose);
+        await controller.loadEvents();
+        final editedEvent = _existingEvent.copyWith(title: 'Updated Meet');
+
+        final succeeded = await controller.updateEvent(editedEvent);
+
+        expect(succeeded, isTrue);
+        expect(controller.errorMessage, isNull);
+        expect(controller.events.single.title, 'Updated Meet');
+      },
+    );
+
+    test(
+      'successful cancel and refresh returns true with cancelled event',
+      () async {
+        final repository = _FakeEventsRepository(events: [_existingEvent]);
+        final controller = EventsController(repository: repository);
+        addTearDown(controller.dispose);
+        await controller.loadEvents();
+
+        final succeeded = await controller.cancelEvent(_existingEvent.id);
+
+        expect(succeeded, isTrue);
+        expect(controller.errorMessage, isNull);
+        expect(controller.events.single.status, EventStatus.cancelled);
+        expect(controller.events.single.cancelledAt, isNotNull);
+      },
+    );
+
     test('updateRsvp failure preserves successful state', () async {
       final repository = _FakeEventsRepository(events: [_existingEvent]);
       final controller = EventsController(repository: repository);
@@ -390,6 +502,8 @@ class _FakeEventsRepository implements EventsRepository {
   Object? loadError;
   Object? createError;
   Object? updateError;
+  Object? updateEventError;
+  Object? cancelError;
   int loadCallCount = 0;
 
   @override
@@ -434,6 +548,33 @@ class _FakeEventsRepository implements EventsRepository {
   }
 
   @override
+  Future<void> updateEvent(Event event) async {
+    final error = updateEventError;
+    if (error != null) {
+      throw error;
+    }
+    final index = _events.indexWhere((existing) => existing.id == event.id);
+    if (index != -1) {
+      _events[index] = event;
+    }
+  }
+
+  @override
+  Future<void> cancelEvent(String eventId) async {
+    final error = cancelError;
+    if (error != null) {
+      throw error;
+    }
+    final index = _events.indexWhere((event) => event.id == eventId);
+    if (index != -1) {
+      _events[index] = _events[index].copyWith(
+        status: EventStatus.cancelled,
+        cancelledAt: DateTime.utc(2026, 6, 30),
+      );
+    }
+  }
+
+  @override
   Future<void> updateRsvp({
     required String eventId,
     required RsvpStatus status,
@@ -465,6 +606,12 @@ class _SequencedEventsRepository implements EventsRepository {
 
   @override
   Future<void> createEvent(Event event) async {}
+
+  @override
+  Future<void> updateEvent(Event event) async {}
+
+  @override
+  Future<void> cancelEvent(String eventId) async {}
 
   @override
   Future<EventSnapshot?> getCachedEvents() async => null;

@@ -259,6 +259,12 @@ class _TrackingEventsRepository implements EventsRepository {
   Future<void> createEvent(Event event) async {}
 
   @override
+  Future<void> updateEvent(Event event) async {}
+
+  @override
+  Future<void> cancelEvent(String eventId) async {}
+
+  @override
   Future<EventSnapshot?> getCachedEvents() async => cachedSnapshot;
 
   @override

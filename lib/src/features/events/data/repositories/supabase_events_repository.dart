@@ -97,6 +97,55 @@ class SupabaseEventsRepository implements EventsRepository {
   }
 
   @override
+  Future<void> updateEvent(Event event) {
+    return _execute('updateEvent', () async {
+      _requireAuthenticatedUserId();
+      final updateValues = EventRecord.fromEntity(event).toCreateMap();
+      final confirmation = await _client.rpc<Map<String, dynamic>>(
+        'update_event_v2',
+        params: {
+          'event_id': updateValues['id'],
+          'title': updateValues['title'],
+          'description': updateValues['description'],
+          'location_name': updateValues['location_name'],
+          'host_name': updateValues['host_name'],
+          'start_time': updateValues['start_time'],
+          'end_time': updateValues['end_time'],
+        },
+      );
+
+      if (confirmation['id'] != event.id ||
+          confirmation['title'] != event.title ||
+          confirmation['description'] != event.description ||
+          confirmation['location_name'] != event.locationName ||
+          confirmation['host_name'] != event.hostName) {
+        throw StateError(
+          'Event update returned an unexpected confirmation: $confirmation',
+        );
+      }
+    });
+  }
+
+  @override
+  Future<void> cancelEvent(String eventId) {
+    return _execute('cancelEvent', () async {
+      _requireAuthenticatedUserId();
+      final confirmation = await _client.rpc<Map<String, dynamic>>(
+        'cancel_event_v2',
+        params: {'event_id': eventId},
+      );
+
+      if (confirmation['id'] != eventId ||
+          confirmation['status'] != EventStatus.cancelled.name) {
+        throw StateError(
+          'Event cancellation returned an unexpected confirmation: '
+          '$confirmation',
+        );
+      }
+    });
+  }
+
+  @override
   Future<Event?> getEventById(String id) {
     return _execute('getEventById', () async {
       _requireAuthenticatedUserId();

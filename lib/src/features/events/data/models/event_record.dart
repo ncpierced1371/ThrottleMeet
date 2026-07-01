@@ -12,6 +12,9 @@ class EventRecord {
     required this.endTime,
     required this.attendeeCount,
     required this.viewerRsvpStatus,
+    this.status = EventStatus.active,
+    this.isOwnedByViewer = false,
+    this.cancelledAt,
   });
 
   final String id;
@@ -23,6 +26,9 @@ class EventRecord {
   final DateTime endTime;
   final int attendeeCount;
   final RsvpStatus? viewerRsvpStatus;
+  final EventStatus status;
+  final bool isOwnedByViewer;
+  final DateTime? cancelledAt;
 
   factory EventRecord.fromMap(Map<String, dynamic> map) {
     return EventRecord(
@@ -35,6 +41,9 @@ class EventRecord {
       endTime: _parseTimestamp(map, 'end_time'),
       attendeeCount: (map['attendee_count'] as num?)?.toInt() ?? 0,
       viewerRsvpStatus: _rsvpStatusFromValue(map['rsvp_status']),
+      status: _eventStatusFromValue(map['status']),
+      isOwnedByViewer: map['is_owner'] as bool? ?? false,
+      cancelledAt: _parseNullableTimestamp(map, 'cancelled_at'),
     );
   }
 
@@ -49,6 +58,9 @@ class EventRecord {
       endTime: event.endTime,
       attendeeCount: event.attendeeCount,
       viewerRsvpStatus: event.viewerRsvpStatus,
+      status: event.status,
+      isOwnedByViewer: event.isOwnedByViewer,
+      cancelledAt: event.cancelledAt,
     );
   }
 
@@ -63,6 +75,9 @@ class EventRecord {
       endTime: endTime,
       attendeeCount: attendeeCount,
       viewerRsvpStatus: viewerRsvpStatus,
+      status: status,
+      isOwnedByViewer: isOwnedByViewer,
+      cancelledAt: cancelledAt,
     );
   }
 
@@ -83,6 +98,9 @@ class EventRecord {
       ...toCreateMap(),
       'attendee_count': attendeeCount,
       'rsvp_status': viewerRsvpStatus?.name,
+      'status': status.name,
+      'is_owner': isOwnedByViewer,
+      'cancelled_at': cancelledAt?.toUtc().toIso8601String(),
     };
   }
 
@@ -105,6 +123,29 @@ class EventRecord {
     }
 
     return timestamp.toUtc();
+  }
+
+  static DateTime? _parseNullableTimestamp(
+    Map<String, dynamic> map,
+    String fieldName,
+  ) {
+    if (map[fieldName] == null) {
+      return null;
+    }
+    return _parseTimestamp(map, fieldName);
+  }
+
+  static EventStatus _eventStatusFromValue(Object? value) {
+    if (value == null) {
+      return EventStatus.active;
+    }
+    if (value is! String) {
+      throw FormatException('Expected event status string, got: $value');
+    }
+    return EventStatus.values.firstWhere(
+      (status) => status.name == value,
+      orElse: () => throw FormatException('Invalid event status: $value'),
+    );
   }
 
   static RsvpStatus? _rsvpStatusFromValue(Object? value) {

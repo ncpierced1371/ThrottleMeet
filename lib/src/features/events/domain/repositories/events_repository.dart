@@ -13,6 +13,10 @@ abstract class EventsRepository {
 
   Future<void> createEvent(Event event);
 
+  Future<void> updateEvent(Event event);
+
+  Future<void> cancelEvent(String eventId);
+
   Future<void> updateRsvp({
     required String eventId,
     required RsvpStatus status,

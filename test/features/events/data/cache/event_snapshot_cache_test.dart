@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:throttlemeet_v2/src/features/events/data/cache/event_snapshot_cache.dart';
@@ -67,6 +69,33 @@ void main() {
     expect(snapshot?.cachedAt, cachedAt.toUtc());
   });
 
+  test(
+    'lifecycle fields round-trip through an authenticated snapshot',
+    () async {
+      final cache = SharedPreferencesEventSnapshotCache();
+      final cancelledAt = DateTime.utc(2026, 6, 30, 12);
+      final event =
+          _event(
+            id: 'cancelled-owned-event',
+            viewerRsvpStatus: RsvpStatus.going,
+          ).copyWith(
+            status: EventStatus.cancelled,
+            isOwnedByViewer: true,
+            cancelledAt: cancelledAt,
+          );
+
+      await cache.write(
+        'user-a',
+        EventSnapshot(events: [event], cachedAt: cancelledAt),
+      );
+      final cachedEvent = (await cache.read('user-a'))!.events.single;
+
+      expect(cachedEvent.status, EventStatus.cancelled);
+      expect(cachedEvent.isOwnedByViewer, isTrue);
+      expect(cachedEvent.cancelledAt, cancelledAt);
+    },
+  );
+
   test('does not reuse a legacy participant-keyed snapshot', () async {
     SharedPreferences.setMockInitialValues({
       'participant_event_snapshot_v1:user-a': '{"legacy":true}',
@@ -74,6 +103,34 @@ void main() {
     final cache = SharedPreferencesEventSnapshotCache();
 
     expect(await cache.read('user-a'), isNull);
+  });
+
+  test('old snapshots default to active non-owner lifecycle state', () async {
+    SharedPreferences.setMockInitialValues({
+      'authenticated_event_snapshot_v1:user-a': jsonEncode({
+        'cached_at': '2026-06-28T12:00:00Z',
+        'events': [
+          {
+            'id': 'old-snapshot-event',
+            'title': 'Saved Meet',
+            'description': 'Saved before lifecycle fields existed.',
+            'location_name': 'Test Garage',
+            'host_name': 'Test Host',
+            'start_time': '2026-07-01T18:00:00Z',
+            'end_time': '2026-07-01T20:00:00Z',
+            'attendee_count': 4,
+            'rsvp_status': null,
+          },
+        ],
+      }),
+    });
+
+    final snapshot = await SharedPreferencesEventSnapshotCache().read('user-a');
+    final event = snapshot!.events.single;
+
+    expect(event.status, EventStatus.active);
+    expect(event.isOwnedByViewer, isFalse);
+    expect(event.cancelledAt, isNull);
   });
 }
 

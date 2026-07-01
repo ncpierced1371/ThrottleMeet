@@ -21,6 +21,25 @@ class InMemoryEventsRepository implements EventsRepository {
   }
 
   @override
+  Future<void> updateEvent(Event event) async {
+    final index = _events.indexWhere((existing) => existing.id == event.id);
+    if (index != -1) {
+      _events[index] = event;
+    }
+  }
+
+  @override
+  Future<void> cancelEvent(String eventId) async {
+    final index = _events.indexWhere((event) => event.id == eventId);
+    if (index != -1) {
+      _events[index] = _events[index].copyWith(
+        status: EventStatus.cancelled,
+        cancelledAt: DateTime.now().toUtc(),
+      );
+    }
+  }
+
+  @override
   Future<Event?> getEventById(String id) async {
     try {
       return _events.firstWhere((event) => event.id == id);

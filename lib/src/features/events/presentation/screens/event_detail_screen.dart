@@ -6,6 +6,7 @@ import '../../domain/entities/event.dart';
 import '../../domain/entities/rsvp_status.dart';
 import '../controllers/events_controller.dart';
 import '../widgets/rsvp_selector.dart';
+import 'create_event_screen.dart';
 
 class EventDetailScreen extends StatelessWidget {
   const EventDetailScreen({
@@ -24,8 +25,28 @@ class EventDetailScreen extends StatelessWidget {
       builder: (context, _) {
         final event = controller.getEventById(eventId);
 
+        final canManage =
+            event?.isOwnedByViewer == true &&
+            event?.status == EventStatus.active;
+
         return Scaffold(
-          appBar: AppBar(title: const Text('Event Detail')),
+          appBar: AppBar(
+            title: const Text('Event Detail'),
+            actions: canManage
+                ? [
+                    IconButton(
+                      onPressed: () => _editEvent(context, event!),
+                      tooltip: 'Edit event',
+                      icon: const Icon(Icons.edit_outlined),
+                    ),
+                    IconButton(
+                      onPressed: () => _confirmCancel(context, event!),
+                      tooltip: 'Cancel event',
+                      icon: const Icon(Icons.event_busy_outlined),
+                    ),
+                  ]
+                : null,
+          ),
           body: event == null
               ? const AppEmptyState(
                   title: 'Event not found',
@@ -35,6 +56,52 @@ class EventDetailScreen extends StatelessWidget {
         );
       },
     );
+  }
+
+  Future<void> _editEvent(BuildContext context, Event event) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) =>
+            CreateEventScreen(controller: controller, eventToEdit: event),
+      ),
+    );
+  }
+
+  Future<void> _confirmCancel(BuildContext context, Event event) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Cancel this event?'),
+        content: const Text(
+          'The event will remain visible, but RSVPs and editing will be disabled.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Keep Event'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Cancel Event'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !context.mounted) {
+      return;
+    }
+
+    final succeeded = await controller.cancelEvent(event.id);
+    if (!context.mounted) {
+      return;
+    }
+    final message = succeeded
+        ? 'Event cancelled.'
+        : controller.errorMessage ?? 'Unable to cancel event.';
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 }
 
@@ -60,6 +127,10 @@ class _EventDetailBodyState extends State<_EventDetailBody> {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
+        if (event.status == EventStatus.cancelled) ...[
+          const _CancelledEventBanner(),
+          const SizedBox(height: 16),
+        ],
         Card(
           child: Padding(
             padding: const EdgeInsets.all(20),
@@ -107,14 +178,19 @@ class _EventDetailBodyState extends State<_EventDetailBody> {
                 Text('RSVP', style: theme.textTheme.titleLarge),
                 const SizedBox(height: 8),
                 Text(
-                  viewerRsvpStatus == null
+                  event.status == EventStatus.cancelled
+                      ? 'RSVP changes are disabled for cancelled events.'
+                      : viewerRsvpStatus == null
                       ? 'You have not responded yet.'
                       : 'Your current status is ${viewerRsvpStatus.label.toLowerCase()}.',
                 ),
                 const SizedBox(height: 16),
                 RsvpSelector(
                   selected: viewerRsvpStatus,
-                  onSelected: _isUpdatingRsvp ? null : _updateRsvp,
+                  onSelected:
+                      _isUpdatingRsvp || event.status == EventStatus.cancelled
+                      ? null
+                      : _updateRsvp,
                 ),
               ],
             ),
@@ -152,6 +228,40 @@ class _EventDetailBodyState extends State<_EventDetailBody> {
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text(message)));
+  }
+}
+
+class _CancelledEventBanner extends StatelessWidget {
+  const _CancelledEventBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Material(
+      color: colorScheme.errorContainer,
+      borderRadius: BorderRadius.circular(12),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            Icon(
+              Icons.event_busy_outlined,
+              color: colorScheme.onErrorContainer,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'Cancelled event',
+                style: TextStyle(
+                  color: colorScheme.onErrorContainer,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 

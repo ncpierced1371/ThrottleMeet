@@ -76,6 +76,72 @@ void main() {
       );
     });
 
+    test('updateEvent uses update_event_v2 without caller identity', () async {
+      late Request request;
+      final event = _event(
+        id: 'owned-event',
+      ).copyWith(title: 'Updated Meet', description: 'Updated description.');
+      final client = _clientWith((receivedRequest) async {
+        request = receivedRequest;
+        return _jsonResponse(receivedRequest, {
+          'id': event.id,
+          'title': event.title,
+          'description': event.description,
+          'location_name': event.locationName,
+          'host_name': event.hostName,
+          'start_time': event.startTime.toIso8601String(),
+          'end_time': event.endTime.toIso8601String(),
+          'updated_at': '2026-06-30T12:00:00Z',
+        });
+      });
+      addTearDown(client.dispose);
+      final repository = SupabaseEventsRepository(
+        authSessionProvider: const _FakeAuthSessionProvider(userId),
+        client: client,
+      );
+
+      await repository.updateEvent(event);
+
+      expect(request.url.path, '/rest/v1/rpc/update_event_v2');
+      expect(jsonDecode(request.body), {
+        'event_id': 'owned-event',
+        'title': 'Updated Meet',
+        'description': 'Updated description.',
+        'location_name': 'Test Garage',
+        'host_name': 'Test Host',
+        'start_time': '2026-07-01T18:00:00.000Z',
+        'end_time': '2026-07-01T20:00:00.000Z',
+      });
+      expect(request.body, isNot(contains('user_id')));
+      expect(request.body, isNot(contains('participant_id')));
+      expect(request.body, isNot(contains('creator_id')));
+      expect(request.body, isNot(contains('is_owner')));
+    });
+
+    test('cancelEvent uses cancel_event_v2 without caller identity', () async {
+      late Request request;
+      final client = _clientWith((receivedRequest) async {
+        request = receivedRequest;
+        return _jsonResponse(receivedRequest, {
+          'id': 'owned-event',
+          'status': 'cancelled',
+          'cancelled_at': '2026-06-30T12:00:00Z',
+        });
+      });
+      addTearDown(client.dispose);
+      final repository = SupabaseEventsRepository(
+        authSessionProvider: const _FakeAuthSessionProvider(userId),
+        client: client,
+      );
+
+      await repository.cancelEvent('owned-event');
+
+      expect(request.url.path, '/rest/v1/rpc/cancel_event_v2');
+      expect(jsonDecode(request.body), {'event_id': 'owned-event'});
+      expect(request.body, isNot(contains('user_id')));
+      expect(request.body, isNot(contains('participant_id')));
+    });
+
     test(
       'getEvents requests the current-user RPC and maps attendee and RSVP data',
       () async {
@@ -435,6 +501,9 @@ Map<String, dynamic> _eventRow({
   required String id,
   required int attendeeCount,
   required String? rsvpStatus,
+  String status = 'active',
+  bool isOwner = false,
+  String? cancelledAt,
 }) {
   return {
     'id': id,
@@ -446,6 +515,9 @@ Map<String, dynamic> _eventRow({
     'end_time': '2026-07-01T20:00:00Z',
     'attendee_count': attendeeCount,
     'rsvp_status': rsvpStatus,
+    'status': status,
+    'is_owner': isOwner,
+    'cancelled_at': cancelledAt,
   };
 }
 

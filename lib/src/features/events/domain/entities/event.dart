@@ -1,6 +1,9 @@
 import 'rsvp_status.dart';
 
 const _unsetViewerRsvpStatus = Object();
+const _unsetCancelledAt = Object();
+
+enum EventStatus { active, cancelled }
 
 class Event {
   const Event({
@@ -13,6 +16,9 @@ class Event {
     required this.endTime,
     required this.attendeeCount,
     required this.viewerRsvpStatus,
+    this.status = EventStatus.active,
+    this.isOwnedByViewer = false,
+    this.cancelledAt,
   });
 
   final String id;
@@ -24,6 +30,9 @@ class Event {
   final DateTime endTime;
   final int attendeeCount;
   final RsvpStatus? viewerRsvpStatus;
+  final EventStatus status;
+  final bool isOwnedByViewer;
+  final DateTime? cancelledAt;
 
   Event copyWith({
     String? id,
@@ -35,6 +44,9 @@ class Event {
     DateTime? endTime,
     int? attendeeCount,
     Object? viewerRsvpStatus = _unsetViewerRsvpStatus,
+    EventStatus? status,
+    bool? isOwnedByViewer,
+    Object? cancelledAt = _unsetCancelledAt,
   }) {
     return Event(
       id: id ?? this.id,
@@ -48,6 +60,11 @@ class Event {
       viewerRsvpStatus: identical(viewerRsvpStatus, _unsetViewerRsvpStatus)
           ? this.viewerRsvpStatus
           : viewerRsvpStatus as RsvpStatus?,
+      status: status ?? this.status,
+      isOwnedByViewer: isOwnedByViewer ?? this.isOwnedByViewer,
+      cancelledAt: identical(cancelledAt, _unsetCancelledAt)
+          ? this.cancelledAt
+          : cancelledAt as DateTime?,
     );
   }
 }

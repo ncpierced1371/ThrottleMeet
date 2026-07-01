@@ -6,9 +6,14 @@ import '../../domain/entities/rsvp_status.dart';
 import '../controllers/events_controller.dart';
 
 class CreateEventScreen extends StatefulWidget {
-  const CreateEventScreen({super.key, required this.controller});
+  const CreateEventScreen({
+    super.key,
+    required this.controller,
+    this.eventToEdit,
+  });
 
   final EventsController controller;
+  final Event? eventToEdit;
 
   @override
   State<CreateEventScreen> createState() => _CreateEventScreenState();
@@ -16,14 +21,35 @@ class CreateEventScreen extends StatefulWidget {
 
 class _CreateEventScreenState extends State<CreateEventScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _titleController = TextEditingController();
-  final _hostController = TextEditingController();
-  final _locationController = TextEditingController();
-  final _descriptionController = TextEditingController();
+  late final TextEditingController _titleController;
+  late final TextEditingController _hostController;
+  late final TextEditingController _locationController;
+  late final TextEditingController _descriptionController;
 
   DateTime? _selectedDate;
   TimeOfDay? _selectedTime;
   bool _isSaving = false;
+
+  bool get _isEditing => widget.eventToEdit != null;
+
+  @override
+  void initState() {
+    super.initState();
+    final event = widget.eventToEdit;
+    _titleController = TextEditingController(text: event?.title);
+    _hostController = TextEditingController(text: event?.hostName);
+    _locationController = TextEditingController(text: event?.locationName);
+    _descriptionController = TextEditingController(text: event?.description);
+    if (event != null) {
+      final localStart = event.startTime.toLocal();
+      _selectedDate = DateTime(
+        localStart.year,
+        localStart.month,
+        localStart.day,
+      );
+      _selectedTime = TimeOfDay.fromDateTime(localStart);
+    }
+  }
 
   @override
   void dispose() {
@@ -41,7 +67,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
         : '${DateTimeFormatter.shortDate(context, _selectedDate!)} at ${DateTimeFormatter.shortTime(context, _selectedTime!)}';
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Create Event')),
+      appBar: AppBar(title: Text(_isEditing ? 'Edit Event' : 'Create Event')),
       body: SafeArea(
         child: Form(
           key: _formKey,
@@ -49,7 +75,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
             padding: const EdgeInsets.all(16),
             children: [
               Text(
-                'Create a simple event.',
+                _isEditing ? 'Update event details.' : 'Create a simple event.',
                 style: Theme.of(context).textTheme.titleMedium,
               ),
               const SizedBox(height: 16),
@@ -120,7 +146,13 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
               const SizedBox(height: 24),
               FilledButton(
                 onPressed: _isSaving ? null : _submit,
-                child: Text(_isSaving ? 'Saving...' : 'Create Event'),
+                child: Text(
+                  _isSaving
+                      ? 'Saving...'
+                      : _isEditing
+                      ? 'Save Changes'
+                      : 'Create Event',
+                ),
               ),
             ],
           ),
@@ -131,11 +163,16 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
 
   Future<void> _pickDate() async {
     final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final initialDate = _selectedDate ?? today;
+    final defaultLastDate = DateTime(now.year + 2, now.month, now.day);
     final picked = await showDatePicker(
       context: context,
-      initialDate: _selectedDate ?? now,
-      firstDate: now,
-      lastDate: DateTime(now.year + 2),
+      initialDate: initialDate,
+      firstDate: initialDate.isBefore(today) ? initialDate : today,
+      lastDate: initialDate.isAfter(defaultLastDate)
+          ? initialDate
+          : defaultLastDate,
     );
 
     if (picked == null) {
@@ -190,20 +227,38 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
       _selectedTime!.hour,
       _selectedTime!.minute,
     );
-    final endTime = startTime.add(const Duration(hours: 2));
-    final event = Event(
-      id: _buildId(_titleController.text.trim(), startTime),
-      title: _titleController.text.trim(),
-      description: _descriptionController.text.trim(),
-      locationName: _locationController.text.trim(),
-      hostName: _hostController.text.trim(),
-      startTime: startTime,
-      endTime: endTime,
-      attendeeCount: 0,
-      viewerRsvpStatus: RsvpStatus.going,
+    final existingEvent = widget.eventToEdit;
+    final duration = existingEvent == null
+        ? const Duration(hours: 2)
+        : existingEvent.endTime.difference(existingEvent.startTime);
+    final endTime = startTime.add(
+      duration > Duration.zero ? duration : const Duration(hours: 2),
     );
+    final event = existingEvent == null
+        ? Event(
+            id: _buildId(_titleController.text.trim(), startTime),
+            title: _titleController.text.trim(),
+            description: _descriptionController.text.trim(),
+            locationName: _locationController.text.trim(),
+            hostName: _hostController.text.trim(),
+            startTime: startTime,
+            endTime: endTime,
+            attendeeCount: 0,
+            viewerRsvpStatus: RsvpStatus.going,
+            isOwnedByViewer: true,
+          )
+        : existingEvent.copyWith(
+            title: _titleController.text.trim(),
+            description: _descriptionController.text.trim(),
+            locationName: _locationController.text.trim(),
+            hostName: _hostController.text.trim(),
+            startTime: startTime,
+            endTime: endTime,
+          );
 
-    final succeeded = await widget.controller.createNewEvent(event);
+    final succeeded = existingEvent == null
+        ? await widget.controller.createNewEvent(event)
+        : await widget.controller.updateEvent(event);
 
     if (!mounted) {
       return;
@@ -216,7 +271,10 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
       messenger.showSnackBar(
         SnackBar(
           content: Text(
-            widget.controller.errorMessage ?? 'Unable to create event.',
+            widget.controller.errorMessage ??
+                (_isEditing
+                    ? 'Unable to update event.'
+                    : 'Unable to create event.'),
           ),
         ),
       );
@@ -224,7 +282,9 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
     }
 
     Navigator.of(context).pop();
-    messenger.showSnackBar(const SnackBar(content: Text('Event created.')));
+    messenger.showSnackBar(
+      SnackBar(content: Text(_isEditing ? 'Event updated.' : 'Event created.')),
+    );
   }
 
   String? _requiredField(String? value) {
