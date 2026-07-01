@@ -29,7 +29,7 @@ class EventCard extends StatelessWidget {
               child: ColoredBox(color: colorScheme.secondary),
             ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(24, 20, 20, 20),
+              padding: const EdgeInsets.fromLTRB(22, 16, 16, 14),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -63,36 +63,38 @@ class EventCard extends StatelessWidget {
                         ),
                       ),
                       if (event.viewerRsvpStatus != null) ...[
-                        const SizedBox(width: 12),
-                        Chip(label: Text(event.viewerRsvpStatus!.label)),
+                        const SizedBox(width: 10),
+                        Chip(
+                          label: Text(event.viewerRsvpStatus!.label),
+                          visualDensity: const VisualDensity(
+                            horizontal: -2,
+                            vertical: -2,
+                          ),
+                          materialTapTargetSize:
+                              MaterialTapTargetSize.shrinkWrap,
+                        ),
                       ],
                     ],
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 12),
                   Text(
                     event.description,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: theme.textTheme.bodyMedium?.copyWith(
                       color: colorScheme.onSurfaceVariant,
-                      height: 1.45,
+                      height: 1.35,
                     ),
                   ),
-                  const SizedBox(height: 18),
-                  Wrap(
-                    spacing: 10,
-                    runSpacing: 8,
-                    children: [
-                      _MetaPill(
-                        icon: Icons.place_outlined,
-                        label: event.locationName,
-                      ),
-                      _MetaPill(
-                        icon: Icons.person_outline,
-                        label: event.hostName,
-                      ),
-                    ],
+                  const SizedBox(height: 12),
+                  _EventMetadata(
+                    locationName: event.locationName,
+                    hostName: event.hostName,
                   ),
+                  const SizedBox(height: 12),
+                  Divider(height: 1, color: colorScheme.outlineVariant),
+                  const SizedBox(height: 9),
+                  _AttendeeCount(count: event.attendeeCount),
                 ],
               ),
             ),
@@ -103,8 +105,48 @@ class EventCard extends StatelessWidget {
   }
 }
 
-class _MetaPill extends StatelessWidget {
-  const _MetaPill({required this.icon, required this.label});
+class _EventMetadata extends StatelessWidget {
+  const _EventMetadata({required this.locationName, required this.hostName});
+
+  final String locationName;
+  final String hostName;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final useTwoColumns = constraints.maxWidth >= 480;
+        final itemWidth = useTwoColumns
+            ? (constraints.maxWidth - 16) / 2
+            : constraints.maxWidth;
+
+        return Wrap(
+          spacing: 16,
+          runSpacing: 6,
+          children: [
+            SizedBox(
+              width: itemWidth,
+              child: _CompactInfoRow(
+                icon: Icons.place_outlined,
+                label: locationName,
+              ),
+            ),
+            SizedBox(
+              width: itemWidth,
+              child: _CompactInfoRow(
+                icon: Icons.person_outline,
+                label: hostName,
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _CompactInfoRow extends StatelessWidget {
+  const _CompactInfoRow({required this.icon, required this.label});
 
   final IconData icon;
   final String label;
@@ -114,27 +156,49 @@ class _MetaPill extends StatelessWidget {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: colorScheme.secondaryContainer,
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: colorScheme.outlineVariant),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 17, color: colorScheme.secondary),
-          const SizedBox(width: 6),
-          Text(
+    return Row(
+      children: [
+        Icon(icon, size: 17, color: colorScheme.secondary),
+        const SizedBox(width: 7),
+        Expanded(
+          child: Text(
             label,
-            style: theme.textTheme.labelMedium?.copyWith(
-              color: colorScheme.onSecondaryContainer,
-              fontWeight: FontWeight.w600,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: colorScheme.onSurfaceVariant,
+              fontWeight: FontWeight.w500,
             ),
           ),
-        ],
-      ),
+        ),
+      ],
+    );
+  }
+}
+
+class _AttendeeCount extends StatelessWidget {
+  const _AttendeeCount({required this.count});
+
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final label = count == 1 ? '1 attendee' : '$count attendees';
+
+    return Row(
+      children: [
+        Icon(Icons.group_outlined, size: 18, color: colorScheme.primary),
+        const SizedBox(width: 7),
+        Text(
+          label,
+          style: theme.textTheme.labelMedium?.copyWith(
+            color: colorScheme.onSurface,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
     );
   }
 }

@@ -46,6 +46,7 @@ void main() {
   });
 
   testWidgets('shows an event without a viewer RSVP', (tester) async {
+    var wasTapped = false;
     final event = Event(
       id: 'event-without-rsvp',
       title: 'Unanswered Meet',
@@ -61,12 +62,19 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
-          body: EventCard(event: event, onTap: () {}),
+          body: EventCard(event: event, onTap: () => wasTapped = true),
         ),
       ),
     );
 
     expect(find.text('Unanswered Meet'), findsOneWidget);
+    expect(find.text('Test Garage'), findsOneWidget);
+    expect(find.text('Test Host'), findsOneWidget);
+    expect(find.text('4 attendees'), findsOneWidget);
+
+    await tester.tap(find.byType(EventCard));
+
+    expect(wasTapped, isTrue);
     expect(tester.takeException(), isNull);
   });
 
@@ -160,20 +168,16 @@ void main() {
       ),
     );
 
+    await tester.drag(find.byType(ListView), const Offset(0, -240));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Going'));
     await tester.pump();
 
     expect(repository.updateCallCount, 1);
-    expect(
-      tester.widgetList<ChoiceChip>(find.byType(ChoiceChip)),
-      everyElement(
-        isA<ChoiceChip>().having(
-          (chip) => chip.onSelected,
-          'onSelected',
-          isNull,
-        ),
-      ),
+    final pendingSelector = tester.widget<SegmentedButton<RsvpStatus>>(
+      find.byType(SegmentedButton<RsvpStatus>),
     );
+    expect(pendingSelector.onSelectionChanged, isNull);
 
     await tester.tap(find.text('Interested'));
     await tester.pump();
@@ -251,16 +255,11 @@ void main() {
     expect(find.text('Cancelled event'), findsOneWidget);
     expect(find.byTooltip('Edit event'), findsNothing);
     expect(find.byTooltip('Cancel event'), findsNothing);
-    expect(
-      tester.widgetList<ChoiceChip>(find.byType(ChoiceChip)),
-      everyElement(
-        isA<ChoiceChip>().having(
-          (chip) => chip.onSelected,
-          'onSelected',
-          isNull,
-        ),
-      ),
+    final cancelledSelector = tester.widget<SegmentedButton<RsvpStatus>>(
+      find.byType(SegmentedButton<RsvpStatus>),
     );
+    expect(cancelledSelector.onSelectionChanged, isNull);
+    expect(cancelledSelector.selected, {RsvpStatus.going});
   });
 
   testWidgets('cancel requires confirmation before invoking controller', (
@@ -282,6 +281,8 @@ void main() {
       ),
     );
 
+    await tester.drag(find.byType(ListView), const Offset(0, -500));
+    await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Cancel event'));
     await tester.pumpAndSettle();
     expect(find.text('Cancel this event?'), findsOneWidget);

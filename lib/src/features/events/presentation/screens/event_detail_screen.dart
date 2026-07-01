@@ -30,29 +30,20 @@ class EventDetailScreen extends StatelessWidget {
             event?.status == EventStatus.active;
 
         return Scaffold(
-          appBar: AppBar(
-            title: const Text('Event Detail'),
-            actions: canManage
-                ? [
-                    IconButton(
-                      onPressed: () => _editEvent(context, event!),
-                      tooltip: 'Edit event',
-                      icon: const Icon(Icons.edit_outlined),
-                    ),
-                    IconButton(
-                      onPressed: () => _confirmCancel(context, event!),
-                      tooltip: 'Cancel event',
-                      icon: const Icon(Icons.event_busy_outlined),
-                    ),
-                  ]
-                : null,
-          ),
+          appBar: AppBar(title: const Text('Event')),
           body: event == null
               ? const AppEmptyState(
                   title: 'Event not found',
                   message: 'This event may have been removed or never existed.',
                 )
-              : _EventDetailBody(event: event, controller: controller),
+              : _EventDetailBody(
+                  event: event,
+                  controller: controller,
+                  onEdit: canManage ? () => _editEvent(context, event) : null,
+                  onCancel: canManage
+                      ? () => _confirmCancel(context, event)
+                      : null,
+                ),
         );
       },
     );
@@ -106,10 +97,17 @@ class EventDetailScreen extends StatelessWidget {
 }
 
 class _EventDetailBody extends StatefulWidget {
-  const _EventDetailBody({required this.event, required this.controller});
+  const _EventDetailBody({
+    required this.event,
+    required this.controller,
+    this.onEdit,
+    this.onCancel,
+  });
 
   final Event event;
   final EventsController controller;
+  final VoidCallback? onEdit;
+  final VoidCallback? onCancel;
 
   @override
   State<_EventDetailBody> createState() => _EventDetailBodyState();
@@ -125,73 +123,67 @@ class _EventDetailBodyState extends State<_EventDetailBody> {
     final viewerRsvpStatus = event.viewerRsvpStatus;
 
     return ListView(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(16, 20, 16, 32),
       children: [
-        if (event.status == EventStatus.cancelled) ...[
-          const _CancelledEventBanner(),
-          const SizedBox(height: 16),
-        ],
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(20),
+        Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 760),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(event.title, style: theme.textTheme.headlineSmall),
-                const SizedBox(height: 12),
-                Text(event.description, style: theme.textTheme.bodyLarge),
-                const SizedBox(height: 20),
-                _DetailRow(
-                  icon: Icons.calendar_today_outlined,
-                  label: 'When',
-                  value: DateTimeFormatter.shortDateTime(
-                    context,
-                    event.startTime,
+                Text(
+                  event.title,
+                  style: theme.textTheme.headlineMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    height: 1.15,
                   ),
                 ),
-                _DetailRow(
-                  icon: Icons.place_outlined,
-                  label: 'Where',
-                  value: event.locationName,
-                ),
-                _DetailRow(
-                  icon: Icons.person_outline,
-                  label: 'Host',
-                  value: event.hostName,
-                ),
-                _DetailRow(
-                  icon: Icons.group_outlined,
-                  label: 'Attendees',
-                  value: '${event.attendeeCount}',
-                ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 16),
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('RSVP', style: theme.textTheme.titleLarge),
-                const SizedBox(height: 8),
-                Text(
-                  event.status == EventStatus.cancelled
-                      ? 'RSVP changes are disabled for cancelled events.'
-                      : viewerRsvpStatus == null
-                      ? 'You have not responded yet.'
-                      : 'Your current status is ${viewerRsvpStatus.label.toLowerCase()}.',
-                ),
+                const SizedBox(height: 10),
+                _EventSchedule(startTime: event.startTime),
+                if (event.status == EventStatus.cancelled) ...[
+                  const SizedBox(height: 16),
+                  const _CancelledEventBanner(),
+                ],
+                const SizedBox(height: 20),
+                _EventFacts(event: event),
                 const SizedBox(height: 16),
-                RsvpSelector(
-                  selected: viewerRsvpStatus,
-                  onSelected:
-                      _isUpdatingRsvp || event.status == EventStatus.cancelled
-                      ? null
-                      : _updateRsvp,
+                _DescriptionSection(description: event.description),
+                const SizedBox(height: 16),
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('RSVP', style: theme.textTheme.titleLarge),
+                        const SizedBox(height: 8),
+                        Text(
+                          event.status == EventStatus.cancelled
+                              ? 'RSVP changes are disabled for cancelled events.'
+                              : viewerRsvpStatus == null
+                              ? 'You have not responded yet.'
+                              : 'Your current status is ${viewerRsvpStatus.label.toLowerCase()}.',
+                        ),
+                        const SizedBox(height: 16),
+                        RsvpSelector(
+                          selected: viewerRsvpStatus,
+                          onSelected:
+                              _isUpdatingRsvp ||
+                                  event.status == EventStatus.cancelled
+                              ? null
+                              : _updateRsvp,
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
+                if (widget.onEdit != null && widget.onCancel != null) ...[
+                  const SizedBox(height: 16),
+                  _OrganizerControls(
+                    onEdit: widget.onEdit!,
+                    onCancel: widget.onCancel!,
+                  ),
+                ],
               ],
             ),
           ),
@@ -228,6 +220,168 @@ class _EventDetailBodyState extends State<_EventDetailBody> {
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text(message)));
+  }
+}
+
+class _EventSchedule extends StatelessWidget {
+  const _EventSchedule({required this.startTime});
+
+  final DateTime startTime;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return Row(
+      children: [
+        Icon(
+          Icons.calendar_today_outlined,
+          size: 20,
+          color: colorScheme.secondary,
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            DateTimeFormatter.shortDateTime(context, startTime),
+            style: theme.textTheme.titleMedium?.copyWith(
+              color: colorScheme.secondary,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _EventFacts extends StatelessWidget {
+  const _EventFacts({required this.event});
+
+  final Event event;
+
+  @override
+  Widget build(BuildContext context) {
+    final attendeeLabel = event.attendeeCount == 1
+        ? '1 attendee'
+        : '${event.attendeeCount} attendees';
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+        child: Column(
+          children: [
+            _DetailRow(
+              icon: Icons.place_outlined,
+              label: 'Location',
+              value: event.locationName,
+            ),
+            const Divider(height: 1),
+            _DetailRow(
+              icon: Icons.person_outline,
+              label: 'Organizer',
+              value: event.hostName,
+            ),
+            const Divider(height: 1),
+            _DetailRow(
+              icon: Icons.group_outlined,
+              label: 'Attendance',
+              value: attendeeLabel,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DescriptionSection extends StatelessWidget {
+  const _DescriptionSection({required this.description});
+
+  final String description;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('About this event', style: theme.textTheme.titleLarge),
+            const SizedBox(height: 10),
+            Text(
+              description,
+              style: theme.textTheme.bodyLarge?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+                height: 1.45,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _OrganizerControls extends StatelessWidget {
+  const _OrganizerControls({required this.onEdit, required this.onCancel});
+
+  final VoidCallback onEdit;
+  final VoidCallback onCancel;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Organizer controls', style: theme.textTheme.titleMedium),
+            const SizedBox(height: 6),
+            Text(
+              'Manage the event details or cancel the event.',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Wrap(
+              spacing: 12,
+              runSpacing: 10,
+              children: [
+                Tooltip(
+                  message: 'Edit event',
+                  child: OutlinedButton.icon(
+                    onPressed: onEdit,
+                    icon: const Icon(Icons.edit_outlined),
+                    label: const Text('Edit Event'),
+                  ),
+                ),
+                Tooltip(
+                  message: 'Cancel event',
+                  child: TextButton.icon(
+                    onPressed: onCancel,
+                    style: TextButton.styleFrom(
+                      foregroundColor: colorScheme.error,
+                    ),
+                    icon: const Icon(Icons.event_busy_outlined),
+                    label: const Text('Cancel'),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 
@@ -278,20 +432,34 @@ class _DetailRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
     return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.symmetric(vertical: 10),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Icon(icon, size: 20),
+          Icon(icon, size: 20, color: colorScheme.secondary),
           const SizedBox(width: 12),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                Text(label, style: Theme.of(context).textTheme.labelLarge),
-                const SizedBox(height: 4),
-                Text(value),
+                SizedBox(
+                  width: 92,
+                  child: Text(label, style: theme.textTheme.labelLarge),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    value,
+                    textAlign: TextAlign.end,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
