@@ -12,11 +12,11 @@ class EventsListScreen extends StatefulWidget {
   const EventsListScreen({
     super.key,
     required this.controller,
-    this.authController,
+    required this.authController,
   });
 
   final EventsController controller;
-  final AuthBootstrapController? authController;
+  final AuthBootstrapController authController;
 
   @override
   State<EventsListScreen> createState() => _EventsListScreenState();
@@ -34,21 +34,20 @@ class _EventsListScreenState extends State<EventsListScreen> {
           appBar: AppBar(
             title: const Text('ThrottleMeet'),
             actions: [
-              if (widget.authController != null)
-                IconButton(
-                  onPressed: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute<void>(
-                        builder: (_) => DiagnosticsScreen(
-                          authController: widget.authController!,
-                          eventsController: controller,
-                        ),
+              IconButton(
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => DiagnosticsScreen(
+                        authController: widget.authController,
+                        eventsController: controller,
                       ),
-                    );
-                  },
-                  tooltip: 'Settings and diagnostics',
-                  icon: const Icon(Icons.info_outline),
-                ),
+                    ),
+                  );
+                },
+                tooltip: 'Diagnostics',
+                icon: const Icon(Icons.info_outline),
+              ),
               IconButton(
                 onPressed: controller.isLoading ? null : controller.loadEvents,
                 tooltip: 'Refresh events',

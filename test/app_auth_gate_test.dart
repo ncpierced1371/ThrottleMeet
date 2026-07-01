@@ -1,7 +1,10 @@
 import 'dart:async';
 
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:throttlemeet_v2/src/app.dart';
+import 'package:throttlemeet_v2/src/core/build_info.dart';
+import 'package:throttlemeet_v2/src/core/platform/platform_info.dart';
 import 'package:throttlemeet_v2/src/features/auth/domain/entities/user_profile.dart';
 import 'package:throttlemeet_v2/src/features/auth/domain/repositories/auth_gateway.dart';
 import 'package:throttlemeet_v2/src/features/auth/domain/repositories/profile_repository.dart';
@@ -13,6 +16,45 @@ import 'package:throttlemeet_v2/src/features/events/domain/repositories/events_r
 import 'package:throttlemeet_v2/src/features/events/presentation/controllers/events_controller.dart';
 
 void main() {
+  testWidgets('events list opens discoverable Diagnostics/About screen', (
+    tester,
+  ) async {
+    final authController = AuthBootstrapController(
+      authGateway: _FakeAuthGateway(currentUserId: 'diagnostic-user'),
+      profileRepository: _FakeProfileRepository(),
+    );
+    addTearDown(authController.dispose);
+
+    await tester.pumpWidget(
+      ThrottleMeetApp(
+        authBootstrapController: authController,
+        eventsControllerFactory: () =>
+            EventsController(repository: _TrackingEventsRepository()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byTooltip('Diagnostics'), findsOneWidget);
+    expect(find.byTooltip('Refresh events'), findsOneWidget);
+    expect(find.text('Create Event'), findsWidgets);
+
+    await tester.tap(find.byTooltip('Diagnostics'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Settings & About'), findsOneWidget);
+    expect(
+      find.textContaining('Version ${BuildInfo.versionWithBuild}'),
+      findsOneWidget,
+    );
+    expect(find.text(PlatformInfo.current), findsWidgets);
+    await tester.scrollUntilVisible(
+      find.text('Copy diagnostic report'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('Copy diagnostic report'), findsOneWidget);
+  });
+
   testWidgets('does not construct or load events before auth is ready', (
     tester,
   ) async {

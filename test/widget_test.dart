@@ -2,6 +2,10 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:throttlemeet_v2/src/features/auth/domain/entities/user_profile.dart';
+import 'package:throttlemeet_v2/src/features/auth/domain/repositories/auth_gateway.dart';
+import 'package:throttlemeet_v2/src/features/auth/domain/repositories/profile_repository.dart';
+import 'package:throttlemeet_v2/src/features/auth/presentation/controllers/auth_bootstrap_controller.dart';
 import 'package:throttlemeet_v2/src/features/events/data/repositories/in_memory_events_repository.dart';
 import 'package:throttlemeet_v2/src/features/events/data/seeds/seed_events.dart';
 import 'package:throttlemeet_v2/src/features/events/domain/entities/event.dart';
@@ -13,15 +17,27 @@ import 'package:throttlemeet_v2/src/features/events/presentation/screens/event_d
 import 'package:throttlemeet_v2/src/features/events/presentation/screens/events_list_screen.dart';
 import 'package:throttlemeet_v2/src/features/events/presentation/widgets/event_card.dart';
 
+Widget _eventsListApp(EventsController controller) {
+  final authController = AuthBootstrapController(
+    authGateway: _WidgetAuthGateway(),
+    profileRepository: _WidgetProfileRepository(),
+  );
+  addTearDown(authController.dispose);
+  return MaterialApp(
+    home: EventsListScreen(
+      controller: controller,
+      authController: authController,
+    ),
+  );
+}
+
 void main() {
   testWidgets('shows events without a live backend', (tester) async {
     final controller = EventsController(repository: InMemoryEventsRepository());
     addTearDown(controller.dispose);
     await controller.loadEvents();
 
-    await tester.pumpWidget(
-      MaterialApp(home: EventsListScreen(controller: controller)),
-    );
+    await tester.pumpWidget(_eventsListApp(controller));
     await tester.pumpAndSettle();
 
     expect(find.text('ThrottleMeet'), findsOneWidget);
@@ -62,9 +78,7 @@ void main() {
     addTearDown(controller.dispose);
     await controller.loadEvents();
 
-    await tester.pumpWidget(
-      MaterialApp(home: EventsListScreen(controller: controller)),
-    );
+    await tester.pumpWidget(_eventsListApp(controller));
 
     expect(find.text('Unable to load events'), findsOneWidget);
     expect(find.text('Retry'), findsOneWidget);
@@ -87,9 +101,7 @@ void main() {
     addTearDown(controller.dispose);
     await controller.loadEvents();
 
-    await tester.pumpWidget(
-      MaterialApp(home: EventsListScreen(controller: controller)),
-    );
+    await tester.pumpWidget(_eventsListApp(controller));
 
     expect(find.text('No events yet'), findsOneWidget);
     expect(find.text('Unable to load events'), findsNothing);
@@ -104,9 +116,7 @@ void main() {
     repository.shouldFail = true;
     await controller.loadEvents();
 
-    await tester.pumpWidget(
-      MaterialApp(home: EventsListScreen(controller: controller)),
-    );
+    await tester.pumpWidget(_eventsListApp(controller));
 
     expect(find.text('Spring Canyon Run'), findsOneWidget);
     expect(find.text('Unable to load events.'), findsOneWidget);
@@ -126,9 +136,7 @@ void main() {
     addTearDown(controller.dispose);
     await controller.loadEvents();
 
-    await tester.pumpWidget(
-      MaterialApp(home: EventsListScreen(controller: controller)),
-    );
+    await tester.pumpWidget(_eventsListApp(controller));
 
     expect(find.text('Spring Canyon Run'), findsOneWidget);
     expect(find.text('Showing saved events'), findsOneWidget);
@@ -428,4 +436,27 @@ class _PendingRsvpRepository implements EventsRepository {
     updateCallCount += 1;
     return _updateCompleter.future;
   }
+}
+
+class _WidgetAuthGateway implements AuthGateway {
+  @override
+  String? get currentUserId => 'widget-user';
+
+  @override
+  Future<String> signInAnonymously() async => 'widget-user';
+}
+
+class _WidgetProfileRepository implements ProfileRepository {
+  @override
+  Future<UserProfile> load(String userId) async {
+    return UserProfile(
+      id: userId,
+      displayName: null,
+      createdAt: DateTime.utc(2026, 6, 30),
+      updatedAt: DateTime.utc(2026, 6, 30),
+    );
+  }
+
+  @override
+  Future<void> upsert(String userId) async {}
 }
