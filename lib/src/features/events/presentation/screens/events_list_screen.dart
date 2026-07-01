@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/app_empty_state.dart';
 import '../../../auth/presentation/controllers/auth_bootstrap_controller.dart';
+import '../../../auth/presentation/screens/profile_edit_screen.dart';
 import '../../../diagnostics/presentation/screens/diagnostics_screen.dart';
 import '../controllers/events_controller.dart';
 import 'create_event_screen.dart';
@@ -29,7 +30,7 @@ class _EventsListScreenState extends State<EventsListScreen> {
     final controller = widget.controller;
 
     return AnimatedBuilder(
-      animation: controller,
+      animation: Listenable.merge([controller, widget.authController]),
       builder: (context, _) {
         return Scaffold(
           appBar: AppBar(
@@ -67,11 +68,70 @@ class _EventsListScreenState extends State<EventsListScreen> {
             icon: const Icon(Icons.add),
             label: const Text('Create Event'),
           ),
-          body: controller.isLoading && controller.events.isEmpty
-              ? const Center(child: CircularProgressIndicator())
-              : _EventsListBody(controller: controller),
+          body: Column(
+            children: [
+              if (_shouldPromptForProfile)
+                _IncompleteProfilePrompt(onPressed: _openProfile),
+              Expanded(
+                child: controller.isLoading && controller.events.isEmpty
+                    ? const Center(child: CircularProgressIndicator())
+                    : _EventsListBody(controller: controller),
+              ),
+            ],
+          ),
         );
       },
+    );
+  }
+
+  bool get _shouldPromptForProfile {
+    final authController = widget.authController;
+    return authController.profileSyncStatus == ProfileSyncStatus.ready &&
+        !(authController.profile?.displayName?.trim().isNotEmpty ?? false);
+  }
+
+  void _openProfile() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) =>
+            ProfileEditScreen(authController: widget.authController),
+      ),
+    );
+  }
+}
+
+class _IncompleteProfilePrompt extends StatelessWidget {
+  const _IncompleteProfilePrompt({required this.onPressed});
+
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Material(
+      color: colorScheme.secondaryContainer,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
+        child: Row(
+          children: [
+            Icon(Icons.person_outline, color: colorScheme.onSecondaryContainer),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'Add a display name for the beta.',
+                style: TextStyle(color: colorScheme.onSecondaryContainer),
+              ),
+            ),
+            TextButton(
+              onPressed: onPressed,
+              style: TextButton.styleFrom(
+                foregroundColor: colorScheme.onSecondaryContainer,
+              ),
+              child: const Text('Complete profile'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -145,37 +205,124 @@ class _EventsListBody extends StatelessWidget {
       );
     }
 
+    final visibleEvents = controller.visibleEvents;
+
     return Column(
       children: [
         if (controller.isLoading) const LinearProgressIndicator(),
         if (controller.isShowingCachedEvents) const _CachedEventsBanner(),
         if (controller.errorMessage != null)
           _EventsLoadErrorBanner(controller: controller),
+        _EventFilterControl(controller: controller),
         Expanded(
-          child: ListView.separated(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
-            itemCount: controller.events.length,
-            separatorBuilder: (_, index) => const SizedBox(height: 12),
-            itemBuilder: (context, index) {
-              final event = controller.events[index];
+          child: visibleEvents.isEmpty
+              ? _FilteredEventsEmptyState(filter: controller.selectedFilter)
+              : ListView.separated(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
+                  itemCount: visibleEvents.length,
+                  separatorBuilder: (_, index) => const SizedBox(height: 12),
+                  itemBuilder: (context, index) {
+                    final event = visibleEvents[index];
 
-              return EventCard(
-                event: event,
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute<void>(
-                      builder: (_) => EventDetailScreen(
-                        controller: controller,
-                        eventId: event.id,
-                      ),
-                    ),
-                  );
-                },
-              );
-            },
-          ),
+                    return EventCard(
+                      event: event,
+                      onTap: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) => EventDetailScreen(
+                              controller: controller,
+                              eventId: event.id,
+                            ),
+                          ),
+                        );
+                      },
+                    );
+                  },
+                ),
         ),
       ],
+    );
+  }
+}
+
+class _EventFilterControl extends StatelessWidget {
+  const _EventFilterControl({required this.controller});
+
+  final EventsController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      child: SegmentedButton<EventListFilter>(
+        segments: EventListFilter.values
+            .map(
+              (filter) => ButtonSegment<EventListFilter>(
+                value: filter,
+                label: Text(switch (filter) {
+                  EventListFilter.all => 'All',
+                  EventListFilter.upcoming => 'Upcoming',
+                  EventListFilter.mine => 'Mine',
+                }),
+              ),
+            )
+            .toList(),
+        selected: {controller.selectedFilter},
+        showSelectedIcon: false,
+        expandedInsets: EdgeInsets.zero,
+        onSelectionChanged: (selection) {
+          controller.selectFilter(selection.first);
+        },
+        style: ButtonStyle(
+          backgroundColor: WidgetStateProperty.resolveWith((states) {
+            return states.contains(WidgetState.selected)
+                ? colorScheme.secondary
+                : colorScheme.surface;
+          }),
+          foregroundColor: WidgetStateProperty.resolveWith((states) {
+            return states.contains(WidgetState.selected)
+                ? colorScheme.onSecondary
+                : colorScheme.onSurfaceVariant;
+          }),
+          side: WidgetStatePropertyAll(
+            BorderSide(color: colorScheme.outlineVariant),
+          ),
+          textStyle: WidgetStatePropertyAll(
+            theme.textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w600),
+          ),
+          padding: const WidgetStatePropertyAll(
+            EdgeInsets.symmetric(horizontal: 8, vertical: 9),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _FilteredEventsEmptyState extends StatelessWidget {
+  const _FilteredEventsEmptyState({required this.filter});
+
+  final EventListFilter filter;
+
+  @override
+  Widget build(BuildContext context) {
+    return AppEmptyState(
+      title: switch (filter) {
+        EventListFilter.all => 'No events yet',
+        EventListFilter.upcoming => 'No upcoming events',
+        EventListFilter.mine => 'No events in Mine',
+      },
+      message: switch (filter) {
+        EventListFilter.all =>
+          'Create the first event and start building the community.',
+        EventListFilter.upcoming =>
+          'Check back soon for newly scheduled events.',
+        EventListFilter.mine =>
+          'Events you own, are going to, or are interested in appear here.',
+      },
     );
   }
 }

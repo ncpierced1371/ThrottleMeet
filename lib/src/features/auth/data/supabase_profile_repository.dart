@@ -31,4 +31,23 @@ class SupabaseProfileRepository implements ProfileRepository {
         .timeout(_requestTimeout);
     return UserProfile.fromMap(data);
   }
+
+  @override
+  Future<UserProfile> update({
+    required String userId,
+    required String displayName,
+    String? avatarUrl,
+  }) async {
+    final data = await _client
+        .from('profiles')
+        .upsert({
+          'id': userId,
+          'display_name': displayName,
+          'avatar_url': avatarUrl,
+        }, onConflict: 'id')
+        .select()
+        .single()
+        .timeout(_requestTimeout);
+    return UserProfile.fromMap(data);
+  }
 }

@@ -6,6 +6,8 @@ import '../../domain/entities/event.dart';
 import '../../domain/entities/rsvp_status.dart';
 import '../../domain/repositories/events_repository.dart';
 
+enum EventListFilter { all, upcoming, mine }
+
 class EventsController extends ChangeNotifier {
   EventsController({
     required EventsRepository repository,
@@ -27,8 +29,21 @@ class EventsController extends ChangeNotifier {
   DateTime? _latestCacheWriteAt;
   int _loadGeneration = 0;
   Future<void> _cacheWriteQueue = Future.value();
+  EventListFilter _selectedFilter = EventListFilter.all;
 
   List<Event> get events => _events;
+  EventListFilter get selectedFilter => _selectedFilter;
+  List<Event> get visibleEvents {
+    return switch (_selectedFilter) {
+      EventListFilter.all => _events,
+      EventListFilter.upcoming =>
+        _events
+            .where((event) => event.startTime.isAfter(_now()))
+            .toList(growable: false),
+      EventListFilter.mine => _events.where(_isMine).toList(growable: false),
+    };
+  }
+
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
   AppErrorType? get errorType => _errorType;
@@ -38,6 +53,20 @@ class EventsController extends ChangeNotifier {
   DateTime? get latestSuccessfulEventRefreshAt =>
       _latestSuccessfulEventRefreshAt;
   DateTime? get latestCacheWriteAt => _latestCacheWriteAt;
+
+  void selectFilter(EventListFilter filter) {
+    if (_selectedFilter == filter) {
+      return;
+    }
+    _selectedFilter = filter;
+    notifyListeners();
+  }
+
+  static bool _isMine(Event event) {
+    return event.isOwnedByViewer ||
+        event.viewerRsvpStatus == RsvpStatus.going ||
+        event.viewerRsvpStatus == RsvpStatus.interested;
+  }
 
   Future<bool> loadEvents() async {
     final generation = ++_loadGeneration;

@@ -32,6 +32,16 @@ Widget _eventsListApp(EventsController controller) {
 }
 
 void main() {
+  test('builds an encoded Google Maps search URL', () {
+    final uri = buildEventMapsUri('Cars & Coffee / San Diego');
+
+    expect(
+      uri.toString(),
+      'https://www.google.com/maps/search/?api=1&query=Cars+%26+Coffee+%2F+San+Diego',
+    );
+    expect(uri.queryParameters['query'], 'Cars & Coffee / San Diego');
+  });
+
   testWidgets('shows events without a live backend', (tester) async {
     final controller = EventsController(repository: InMemoryEventsRepository());
     addTearDown(controller.dispose);
@@ -44,6 +54,72 @@ void main() {
     expect(find.text('Discover local automotive events'), findsOneWidget);
     expect(find.text('Spring Canyon Run'), findsOneWidget);
     expect(find.text('Create Event'), findsOneWidget);
+  });
+
+  testWidgets('filters the loaded event list by All, Upcoming, and Mine', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(800, 1400));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final now = DateTime(2026, 7, 1, 12);
+    final repository = _ToggleEventsRepository(
+      events: [
+        _filterWidgetEvent(
+          id: 'past-public',
+          title: 'Past Public Meet',
+          startTime: now.subtract(const Duration(days: 1)),
+        ),
+        _filterWidgetEvent(
+          id: 'future-public',
+          title: 'Future Public Meet',
+          startTime: now.add(const Duration(days: 1)),
+        ),
+        _filterWidgetEvent(
+          id: 'owned-past',
+          title: 'Owned Past Meet',
+          startTime: now.subtract(const Duration(days: 2)),
+          isOwnedByViewer: true,
+        ),
+        _filterWidgetEvent(
+          id: 'interested-future',
+          title: 'Interested Future Meet',
+          startTime: now.add(const Duration(days: 2)),
+          viewerRsvpStatus: RsvpStatus.interested,
+        ),
+      ],
+    );
+    final controller = EventsController(repository: repository, now: () => now);
+    addTearDown(controller.dispose);
+    await controller.loadEvents();
+
+    await tester.pumpWidget(_eventsListApp(controller));
+
+    expect(find.text('Past Public Meet'), findsOneWidget);
+    expect(find.text('Future Public Meet'), findsOneWidget);
+    expect(find.text('Owned Past Meet'), findsOneWidget);
+    expect(find.text('Interested Future Meet'), findsOneWidget);
+
+    await tester.tap(find.text('Upcoming'));
+    await tester.pump();
+
+    expect(find.text('Past Public Meet'), findsNothing);
+    expect(find.text('Owned Past Meet'), findsNothing);
+    expect(find.text('Future Public Meet'), findsOneWidget);
+    expect(find.text('Interested Future Meet'), findsOneWidget);
+
+    await tester.tap(find.text('Mine'));
+    await tester.pump();
+
+    expect(find.text('Past Public Meet'), findsNothing);
+    expect(find.text('Future Public Meet'), findsNothing);
+    expect(find.text('Owned Past Meet'), findsOneWidget);
+    expect(find.text('Interested Future Meet'), findsOneWidget);
+
+    await tester.tap(find.text('All'));
+    await tester.pump();
+
+    expect(find.text('Past Public Meet'), findsOneWidget);
+    expect(find.text('Future Public Meet'), findsOneWidget);
   });
 
   testWidgets('shows an event without a viewer RSVP', (tester) async {
@@ -233,6 +309,7 @@ void main() {
 
     expect(find.byTooltip('Edit event'), findsOneWidget);
     expect(find.byTooltip('Cancel event'), findsOneWidget);
+    expect(find.text('Open in Maps'), findsOneWidget);
 
     final nonOwnerRepository = _ToggleEventsRepository(
       events: [_lifecycleEvent()],
@@ -252,6 +329,55 @@ void main() {
 
     expect(find.byTooltip('Edit event'), findsNothing);
     expect(find.byTooltip('Cancel event'), findsNothing);
+  });
+
+  testWidgets('hides maps action when the event location is empty', (
+    tester,
+  ) async {
+    final repository = _ToggleEventsRepository(
+      events: [_lifecycleEvent(locationName: '')],
+    );
+    final controller = EventsController(repository: repository);
+    addTearDown(controller.dispose);
+    await controller.loadEvents();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EventDetailScreen(
+          controller: controller,
+          eventId: 'lifecycle-event',
+        ),
+      ),
+    );
+
+    expect(find.text('Open in Maps'), findsNothing);
+  });
+
+  testWidgets('shows an error when the maps app cannot launch', (tester) async {
+    final repository = _ToggleEventsRepository(events: [_lifecycleEvent()]);
+    final controller = EventsController(repository: repository);
+    addTearDown(controller.dispose);
+    await controller.loadEvents();
+    Uri? launchedUri;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EventDetailScreen(
+          controller: controller,
+          eventId: 'lifecycle-event',
+          locationLauncher: (uri) async {
+            launchedUri = uri;
+            return false;
+          },
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Open in Maps'));
+    await tester.pump();
+
+    expect(launchedUri, buildEventMapsUri('Test Garage'));
+    expect(find.text('Unable to open maps for this location.'), findsOneWidget);
   });
 
   testWidgets('cancelled events show a banner and disable RSVP', (
@@ -327,12 +453,13 @@ void main() {
 Event _lifecycleEvent({
   bool isOwnedByViewer = false,
   EventStatus status = EventStatus.active,
+  String locationName = 'Test Garage',
 }) {
   return Event(
     id: 'lifecycle-event',
     title: 'Lifecycle Meet',
     description: 'An event with owner lifecycle controls.',
-    locationName: 'Test Garage',
+    locationName: locationName,
     hostName: 'Test Host',
     startTime: DateTime(2026, 7, 1, 18),
     endTime: DateTime(2026, 7, 1, 20),
@@ -343,6 +470,27 @@ Event _lifecycleEvent({
     cancelledAt: status == EventStatus.cancelled
         ? DateTime.utc(2026, 6, 30)
         : null,
+  );
+}
+
+Event _filterWidgetEvent({
+  required String id,
+  required String title,
+  required DateTime startTime,
+  bool isOwnedByViewer = false,
+  RsvpStatus? viewerRsvpStatus,
+}) {
+  return Event(
+    id: id,
+    title: title,
+    description: 'Filter fixture',
+    locationName: 'Test Garage',
+    hostName: 'Test Host',
+    startTime: startTime,
+    endTime: startTime.add(const Duration(hours: 2)),
+    attendeeCount: 0,
+    viewerRsvpStatus: viewerRsvpStatus,
+    isOwnedByViewer: isOwnedByViewer,
   );
 }
 
@@ -483,4 +631,19 @@ class _WidgetProfileRepository implements ProfileRepository {
 
   @override
   Future<void> upsert(String userId) async {}
+
+  @override
+  Future<UserProfile> update({
+    required String userId,
+    required String displayName,
+    String? avatarUrl,
+  }) async {
+    return UserProfile(
+      id: userId,
+      displayName: displayName,
+      avatarUrl: avatarUrl,
+      createdAt: DateTime.utc(2026, 6, 30),
+      updatedAt: DateTime.utc(2026, 7, 1),
+    );
+  }
 }

@@ -178,6 +178,39 @@ void main() {
       expect(controller.profileError, isNull);
       expect(controller.profile?.id, 'user-a');
     });
+
+    test('saved profile is loaded by a later app bootstrap', () async {
+      final profileRepository = _FakeProfileRepository();
+      final firstController = AuthBootstrapController(
+        authGateway: _FakeAuthGateway(currentUserId: 'user-a'),
+        profileRepository: profileRepository,
+      );
+      addTearDown(firstController.dispose);
+
+      await firstController.bootstrap();
+      await _waitForProfileStatus(firstController, ProfileSyncStatus.ready);
+      expect(
+        await firstController.updateProfile(
+          displayName: 'Persistent Driver',
+          avatarUrl: 'https://example.com/driver.jpg',
+        ),
+        isTrue,
+      );
+
+      final restoredController = AuthBootstrapController(
+        authGateway: _FakeAuthGateway(currentUserId: 'user-a'),
+        profileRepository: profileRepository,
+      );
+      addTearDown(restoredController.dispose);
+      await restoredController.bootstrap();
+      await _waitForProfileStatus(restoredController, ProfileSyncStatus.ready);
+
+      expect(restoredController.profile?.displayName, 'Persistent Driver');
+      expect(
+        restoredController.profile?.avatarUrl,
+        'https://example.com/driver.jpg',
+      );
+    });
   });
 }
 
@@ -224,9 +257,11 @@ class _FakeAuthGateway implements AuthGateway {
 class _FakeProfileRepository implements ProfileRepository {
   Object? upsertError;
   Object? loadError;
+  Object? updateError;
   final List<Completer<void>> pendingUpserts = [];
   final List<String> upsertedUserIds = [];
   final List<String> loadedUserIds = [];
+  UserProfile? storedProfile;
 
   @override
   Future<void> upsert(String userId) async {
@@ -247,11 +282,32 @@ class _FakeProfileRepository implements ProfileRepository {
     if (error != null) {
       throw error;
     }
-    return UserProfile(
+    return storedProfile ??
+        UserProfile(
+          id: userId,
+          displayName: null,
+          createdAt: DateTime.utc(2026, 6, 28),
+          updatedAt: DateTime.utc(2026, 6, 28),
+        );
+  }
+
+  @override
+  Future<UserProfile> update({
+    required String userId,
+    required String displayName,
+    String? avatarUrl,
+  }) async {
+    final error = updateError;
+    if (error != null) {
+      throw error;
+    }
+    storedProfile = UserProfile(
       id: userId,
-      displayName: null,
+      displayName: displayName,
+      avatarUrl: avatarUrl,
       createdAt: DateTime.utc(2026, 6, 28),
-      updatedAt: DateTime.utc(2026, 6, 28),
+      updatedAt: DateTime.utc(2026, 7, 1),
     );
+    return storedProfile!;
   }
 }

@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../../../../core/build_info.dart';
 import '../../../../core/platform/platform_info.dart';
 import '../../../auth/presentation/controllers/auth_bootstrap_controller.dart';
+import '../../../auth/presentation/screens/profile_edit_screen.dart';
 import '../../../events/presentation/controllers/events_controller.dart';
 import '../../domain/diagnostic_report.dart';
 
@@ -36,6 +37,27 @@ class DiagnosticsScreen extends StatelessWidget {
               Text(
                 'Version ${BuildInfo.versionWithBuild} '
                 '• ${BuildInfo.releaseChannel} • ${PlatformInfo.current}',
+              ),
+              const SizedBox(height: 16),
+              Card(
+                child: ListTile(
+                  leading: const Icon(Icons.person_outline),
+                  title: Text(
+                    _hasDisplayName ? 'Profile' : 'Complete your profile',
+                  ),
+                  subtitle: Text(
+                    _hasDisplayName
+                        ? authController.profile!.displayName!.trim()
+                        : 'Add a display name for the controlled beta.',
+                  ),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) =>
+                          ProfileEditScreen(authController: authController),
+                    ),
+                  ),
+                ),
               ),
               const SizedBox(height: 24),
               Text(
@@ -111,6 +133,9 @@ class DiagnosticsScreen extends StatelessWidget {
       latestCacheWrite: eventsController.latestCacheWriteAt,
     );
   }
+
+  bool get _hasDisplayName =>
+      authController.profile?.displayName?.trim().isNotEmpty ?? false;
 
   Future<void> _copyReport(
     BuildContext context,

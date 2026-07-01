@@ -178,6 +178,37 @@ void main() {
     );
   });
 
+  testWidgets('incomplete profile does not block events and shows a prompt', (
+    tester,
+  ) async {
+    final authController = AuthBootstrapController(
+      authGateway: _FakeAuthGateway(currentUserId: 'user-a'),
+      profileRepository: _FakeProfileRepository(),
+    );
+    addTearDown(authController.dispose);
+    final eventsRepository = _TrackingEventsRepository();
+
+    await tester.pumpWidget(
+      ThrottleMeetApp(
+        authBootstrapController: authController,
+        eventsControllerFactory: () =>
+            EventsController(repository: eventsRepository),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(authController.state, AuthBootstrapState.ready);
+    expect(authController.profileSyncStatus, ProfileSyncStatus.ready);
+    expect(eventsRepository.loadCount, 1);
+    expect(find.text('No events yet'), findsOneWidget);
+    expect(find.text('Complete profile'), findsOneWidget);
+
+    await tester.tap(find.text('Complete profile'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Your beta profile'), findsOneWidget);
+  });
+
   testWidgets('auth failure remains blocking', (tester) async {
     final authController = AuthBootstrapController(
       authGateway: _FakeAuthGateway(signInError: StateError('auth failed')),
@@ -283,6 +314,21 @@ class _FakeProfileRepository implements ProfileRepository {
       displayName: null,
       createdAt: DateTime.utc(2026, 6, 28),
       updatedAt: DateTime.utc(2026, 6, 28),
+    );
+  }
+
+  @override
+  Future<UserProfile> update({
+    required String userId,
+    required String displayName,
+    String? avatarUrl,
+  }) async {
+    return UserProfile(
+      id: userId,
+      displayName: displayName,
+      avatarUrl: avatarUrl,
+      createdAt: DateTime.utc(2026, 6, 28),
+      updatedAt: DateTime.utc(2026, 7, 1),
     );
   }
 }

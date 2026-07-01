@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../core/utils/date_time_formatter.dart';
 import '../../../../core/widgets/app_empty_state.dart';
@@ -8,15 +9,30 @@ import '../controllers/events_controller.dart';
 import '../widgets/rsvp_selector.dart';
 import 'create_event_screen.dart';
 
+typedef EventLocationLauncher = Future<bool> Function(Uri uri);
+
+Uri buildEventMapsUri(String locationName) {
+  return Uri.https('www.google.com', '/maps/search/', {
+    'api': '1',
+    'query': locationName.trim(),
+  });
+}
+
+Future<bool> _launchEventLocation(Uri uri) {
+  return launchUrl(uri, mode: LaunchMode.externalApplication);
+}
+
 class EventDetailScreen extends StatelessWidget {
   const EventDetailScreen({
     super.key,
     required this.controller,
     required this.eventId,
+    this.locationLauncher = _launchEventLocation,
   });
 
   final EventsController controller;
   final String eventId;
+  final EventLocationLauncher locationLauncher;
 
   @override
   Widget build(BuildContext context) {
@@ -39,6 +55,7 @@ class EventDetailScreen extends StatelessWidget {
               : _EventDetailBody(
                   event: event,
                   controller: controller,
+                  locationLauncher: locationLauncher,
                   onEdit: canManage ? () => _editEvent(context, event) : null,
                   onCancel: canManage
                       ? () => _confirmCancel(context, event)
@@ -100,12 +117,14 @@ class _EventDetailBody extends StatefulWidget {
   const _EventDetailBody({
     required this.event,
     required this.controller,
+    required this.locationLauncher,
     this.onEdit,
     this.onCancel,
   });
 
   final Event event;
   final EventsController controller;
+  final EventLocationLauncher locationLauncher;
   final VoidCallback? onEdit;
   final VoidCallback? onCancel;
 
@@ -145,7 +164,12 @@ class _EventDetailBodyState extends State<_EventDetailBody> {
                   const _CancelledEventBanner(),
                 ],
                 const SizedBox(height: 20),
-                _EventFacts(event: event),
+                _EventFacts(
+                  event: event,
+                  onOpenMaps: event.locationName.trim().isEmpty
+                      ? null
+                      : () => _openMaps(event.locationName),
+                ),
                 const SizedBox(height: 16),
                 _DescriptionSection(description: event.description),
                 const SizedBox(height: 16),
@@ -221,6 +245,27 @@ class _EventDetailBodyState extends State<_EventDetailBody> {
       context,
     ).showSnackBar(SnackBar(content: Text(message)));
   }
+
+  Future<void> _openMaps(String locationName) async {
+    final uri = buildEventMapsUri(locationName);
+    var launched = false;
+
+    try {
+      launched = await widget.locationLauncher(uri);
+    } on Object {
+      launched = false;
+    }
+
+    if (!mounted || launched) {
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Unable to open maps for this location.'),
+      ),
+    );
+  }
 }
 
 class _EventSchedule extends StatelessWidget {
@@ -256,9 +301,10 @@ class _EventSchedule extends StatelessWidget {
 }
 
 class _EventFacts extends StatelessWidget {
-  const _EventFacts({required this.event});
+  const _EventFacts({required this.event, required this.onOpenMaps});
 
   final Event event;
+  final VoidCallback? onOpenMaps;
 
   @override
   Widget build(BuildContext context) {
@@ -276,6 +322,15 @@ class _EventFacts extends StatelessWidget {
               label: 'Location',
               value: event.locationName,
             ),
+            if (onOpenMaps != null)
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton.icon(
+                  onPressed: onOpenMaps,
+                  icon: const Icon(Icons.map_outlined, size: 18),
+                  label: const Text('Open in Maps'),
+                ),
+              ),
             const Divider(height: 1),
             _DetailRow(
               icon: Icons.person_outline,

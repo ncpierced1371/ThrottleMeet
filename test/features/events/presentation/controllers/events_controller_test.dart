@@ -9,6 +9,88 @@ import 'package:throttlemeet_v2/src/features/events/domain/repositories/events_r
 import 'package:throttlemeet_v2/src/features/events/presentation/controllers/events_controller.dart';
 
 void main() {
+  group('EventsController event filters', () {
+    final now = DateTime.utc(2026, 7, 1, 12);
+
+    test('defaults to All and preserves every loaded event', () async {
+      final events = [
+        _filterEvent(
+          id: 'past',
+          startTime: now.subtract(const Duration(days: 1)),
+        ),
+        _filterEvent(id: 'future', startTime: now.add(const Duration(days: 1))),
+      ];
+      final controller = EventsController(
+        repository: _FakeEventsRepository(events: events),
+        now: () => now,
+      );
+      addTearDown(controller.dispose);
+
+      await controller.loadEvents();
+
+      expect(controller.selectedFilter, EventListFilter.all);
+      expect(controller.visibleEvents, events);
+    });
+
+    test('Upcoming includes only events starting after now', () async {
+      final past = _filterEvent(
+        id: 'past',
+        startTime: now.subtract(const Duration(minutes: 1)),
+      );
+      final current = _filterEvent(id: 'current', startTime: now);
+      final future = _filterEvent(
+        id: 'future',
+        startTime: now.add(const Duration(minutes: 1)),
+      );
+      final controller = EventsController(
+        repository: _FakeEventsRepository(events: [past, current, future]),
+        now: () => now,
+      );
+      addTearDown(controller.dispose);
+      await controller.loadEvents();
+
+      controller.selectFilter(EventListFilter.upcoming);
+
+      expect(controller.visibleEvents, [future]);
+    });
+
+    test('Mine includes owned, Going, and Interested events', () async {
+      final owned = _filterEvent(
+        id: 'owned',
+        startTime: now,
+        isOwnedByViewer: true,
+      );
+      final going = _filterEvent(
+        id: 'going',
+        startTime: now,
+        viewerRsvpStatus: RsvpStatus.going,
+      );
+      final interested = _filterEvent(
+        id: 'interested',
+        startTime: now,
+        viewerRsvpStatus: RsvpStatus.interested,
+      );
+      final notGoing = _filterEvent(
+        id: 'not-going',
+        startTime: now,
+        viewerRsvpStatus: RsvpStatus.notGoing,
+      );
+      final unanswered = _filterEvent(id: 'unanswered', startTime: now);
+      final controller = EventsController(
+        repository: _FakeEventsRepository(
+          events: [owned, going, interested, notGoing, unanswered],
+        ),
+        now: () => now,
+      );
+      addTearDown(controller.dispose);
+      await controller.loadEvents();
+
+      controller.selectFilter(EventListFilter.mine);
+
+      expect(controller.visibleEvents, [owned, going, interested]);
+    });
+  });
+
   group('EventsController cached loading', () {
     final cachedAt = DateTime.utc(2026, 6, 30, 12);
 
@@ -523,6 +605,26 @@ final _newEvent = Event(
   attendeeCount: 0,
   viewerRsvpStatus: null,
 );
+
+Event _filterEvent({
+  required String id,
+  required DateTime startTime,
+  bool isOwnedByViewer = false,
+  RsvpStatus? viewerRsvpStatus,
+}) {
+  return Event(
+    id: id,
+    title: id,
+    description: 'Filter fixture',
+    locationName: 'Test Garage',
+    hostName: 'Test Host',
+    startTime: startTime,
+    endTime: startTime.add(const Duration(hours: 2)),
+    attendeeCount: 0,
+    viewerRsvpStatus: viewerRsvpStatus,
+    isOwnedByViewer: isOwnedByViewer,
+  );
+}
 
 class _FakeEventsRepository implements EventsRepository {
   _FakeEventsRepository({List<Event> events = const [], this.cachedSnapshot})

@@ -4,6 +4,7 @@ class UserProfile {
     required this.displayName,
     required this.createdAt,
     required this.updatedAt,
+    this.avatarUrl,
   });
 
   factory UserProfile.fromMap(Map<String, dynamic> map) {
@@ -24,6 +25,7 @@ class UserProfile {
     return UserProfile(
       id: id,
       displayName: map['display_name'] as String?,
+      avatarUrl: map['avatar_url'] as String?,
       createdAt: DateTime.parse(createdAt),
       updatedAt: DateTime.parse(updatedAt),
     );
@@ -31,6 +33,7 @@ class UserProfile {
 
   final String id;
   final String? displayName;
+  final String? avatarUrl;
   final DateTime createdAt;
   final DateTime updatedAt;
 }

@@ -99,6 +99,58 @@ class AuthBootstrapController extends ChangeNotifier {
 
   Future<void> retryProfileSync() => syncProfile();
 
+  Future<bool> updateProfile({
+    required String displayName,
+    String? avatarUrl,
+  }) async {
+    final authenticatedUserId = _userId;
+    if (_state != AuthBootstrapState.ready || authenticatedUserId == null) {
+      return false;
+    }
+
+    final generation = ++_profileSyncGeneration;
+    _profileSyncStatus = ProfileSyncStatus.syncing;
+    _profileError = null;
+    AppLogger.info('profile.update.started');
+    notifyListeners();
+
+    try {
+      final profile = await _profileRepository.update(
+        userId: authenticatedUserId,
+        displayName: displayName,
+        avatarUrl: avatarUrl,
+      );
+
+      if (profile.id != authenticatedUserId) {
+        throw StateError(
+          'Updated profile does not match the authenticated user.',
+        );
+      }
+      if (!_isCurrentProfileSync(generation, authenticatedUserId)) {
+        return false;
+      }
+
+      _profile = profile;
+      _profileSyncStatus = ProfileSyncStatus.ready;
+      AppLogger.info('profile.update.succeeded');
+      notifyListeners();
+      return true;
+    } catch (error, stackTrace) {
+      if (!_isCurrentProfileSync(generation, authenticatedUserId)) {
+        return false;
+      }
+      _profileError = error;
+      _profileSyncStatus = ProfileSyncStatus.error;
+      AppLogger.error(
+        'profile.update.failed',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      notifyListeners();
+      return false;
+    }
+  }
+
   Future<void> syncProfile() async {
     final authenticatedUserId = _userId;
     if (_state != AuthBootstrapState.ready || authenticatedUserId == null) {
