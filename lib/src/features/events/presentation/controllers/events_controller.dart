@@ -3,10 +3,13 @@ import 'package:flutter/foundation.dart';
 import '../../../../core/errors/app_exception.dart';
 import '../../../../core/logging/app_logger.dart';
 import '../../domain/entities/event.dart';
+import '../../domain/entities/event_rsvp_attendee.dart';
 import '../../domain/entities/rsvp_status.dart';
 import '../../domain/repositories/events_repository.dart';
 
 enum EventListFilter { all, upcoming, mine }
+
+enum OwnerRsvpListStatus { idle, loading, data, error }
 
 class EventsController extends ChangeNotifier {
   EventsController({
@@ -30,6 +33,11 @@ class EventsController extends ChangeNotifier {
   int _loadGeneration = 0;
   Future<void> _cacheWriteQueue = Future.value();
   EventListFilter _selectedFilter = EventListFilter.all;
+  OwnerRsvpListStatus _ownerRsvpListStatus = OwnerRsvpListStatus.idle;
+  List<EventRsvpAttendee> _ownerRsvpAttendees = const [];
+  String? _ownerRsvpListErrorMessage;
+  String? _ownerRsvpListEventId;
+  int _ownerRsvpListGeneration = 0;
 
   List<Event> get events => _events;
   EventListFilter get selectedFilter => _selectedFilter;
@@ -53,6 +61,10 @@ class EventsController extends ChangeNotifier {
   DateTime? get latestSuccessfulEventRefreshAt =>
       _latestSuccessfulEventRefreshAt;
   DateTime? get latestCacheWriteAt => _latestCacheWriteAt;
+  OwnerRsvpListStatus get ownerRsvpListStatus => _ownerRsvpListStatus;
+  List<EventRsvpAttendee> get ownerRsvpAttendees => _ownerRsvpAttendees;
+  String? get ownerRsvpListErrorMessage => _ownerRsvpListErrorMessage;
+  String? get ownerRsvpListEventId => _ownerRsvpListEventId;
 
   void selectFilter(EventListFilter filter) {
     if (_selectedFilter == filter) {
@@ -171,6 +183,59 @@ class EventsController extends ChangeNotifier {
     }
   }
 
+  Future<bool> loadEventRsvpsForOwner(String eventId) async {
+    final generation = ++_ownerRsvpListGeneration;
+    final isNewEvent = _ownerRsvpListEventId != eventId;
+    _ownerRsvpListEventId = eventId;
+    if (isNewEvent) {
+      _ownerRsvpAttendees = const [];
+    }
+    _ownerRsvpListStatus = OwnerRsvpListStatus.loading;
+    _ownerRsvpListErrorMessage = null;
+    AppLogger.info(
+      'event.owner_rsvp_list.started',
+      fields: {'event_id': eventId, 'generation': generation},
+    );
+    notifyListeners();
+
+    try {
+      final attendees = await _repository.getEventRsvpsForOwner(eventId);
+      if (!_isCurrentOwnerRsvpList(generation, eventId)) {
+        return false;
+      }
+      _ownerRsvpAttendees = List.unmodifiable(attendees);
+      _ownerRsvpListStatus = OwnerRsvpListStatus.data;
+      AppLogger.info(
+        'event.owner_rsvp_list.succeeded',
+        fields: {'event_id': eventId, 'attendee_count': attendees.length},
+      );
+      notifyListeners();
+      return true;
+    } catch (error, stackTrace) {
+      if (!_isCurrentOwnerRsvpList(generation, eventId)) {
+        return false;
+      }
+      _ownerRsvpListStatus = OwnerRsvpListStatus.error;
+      _ownerRsvpListErrorMessage = _messageForError(
+        error,
+        fallbackMessage: 'Unable to load organizer attendance.',
+      );
+      AppLogger.error(
+        'event.owner_rsvp_list.failed',
+        fields: {'event_id': eventId},
+        error: error,
+        stackTrace: stackTrace,
+      );
+      notifyListeners();
+      return false;
+    }
+  }
+
+  bool _isCurrentOwnerRsvpList(int generation, String eventId) {
+    return generation == _ownerRsvpListGeneration &&
+        _ownerRsvpListEventId == eventId;
+  }
+
   Future<bool> createNewEvent(Event event) async {
     AppLogger.info('event.create.started', fields: {'event_id': event.id});
     try {
@@ -270,11 +335,33 @@ class EventsController extends ChangeNotifier {
   }
 
   void _recordError(Object error, {required String fallbackMessage}) {
+    final appException = _appExceptionFor(error);
+    _errorType = appException.type;
+    _errorMessage = _messageForAppException(
+      appException,
+      fallbackMessage: fallbackMessage,
+    );
+  }
+
+  String _messageForError(Object error, {required String fallbackMessage}) {
+    return _messageForAppException(
+      _appExceptionFor(error),
+      fallbackMessage: fallbackMessage,
+    );
+  }
+
+  static AppException _appExceptionFor(Object error) {
     final appException = error is AppException
         ? error
         : AppException(type: AppErrorType.unknown, cause: error);
-    _errorType = appException.type;
-    _errorMessage = switch (appException.type) {
+    return appException;
+  }
+
+  static String _messageForAppException(
+    AppException appException, {
+    required String fallbackMessage,
+  }) {
+    return switch (appException.type) {
       AppErrorType.network =>
         'No network connection. Check your connection and try again.',
       AppErrorType.timeout => 'The request timed out. Please try again.',

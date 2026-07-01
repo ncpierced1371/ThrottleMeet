@@ -6,10 +6,12 @@ import '../../../auth/data/supabase_auth_gateway.dart';
 import '../../../auth/domain/repositories/auth_session_provider.dart';
 import '../../domain/entities/event.dart';
 import '../../domain/entities/event_snapshot.dart';
+import '../../domain/entities/event_rsvp_attendee.dart';
 import '../../domain/entities/rsvp_status.dart';
 import '../../domain/repositories/events_repository.dart';
 import '../cache/event_snapshot_cache.dart';
 import '../models/event_record.dart';
+import '../models/event_rsvp_attendee_record.dart';
 import 'supabase_error_mapper.dart';
 
 class SupabaseEventsRepository implements EventsRepository {
@@ -176,6 +178,22 @@ class SupabaseEventsRepository implements EventsRepository {
           .map<Event>((item) => EventRecord.fromMap(item).toEntity())
           .toList();
       return events;
+    });
+  }
+
+  @override
+  Future<List<EventRsvpAttendee>> getEventRsvpsForOwner(String eventId) {
+    return _execute('getEventRsvpsForOwner', () async {
+      _requireAuthenticatedUserId();
+      final data = await _client
+          .rpc('get_event_rsvps_for_owner_v1', params: {'event_id': eventId})
+          .select();
+
+      return data
+          .map<EventRsvpAttendee>(
+            (item) => EventRsvpAttendeeRecord.fromMap(item).toEntity(),
+          )
+          .toList(growable: false);
     });
   }
 

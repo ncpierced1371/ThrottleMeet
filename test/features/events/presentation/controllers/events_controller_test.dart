@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:throttlemeet_v2/src/core/errors/app_exception.dart';
 import 'package:throttlemeet_v2/src/features/events/domain/entities/event.dart';
 import 'package:throttlemeet_v2/src/features/events/domain/entities/event_snapshot.dart';
+import 'package:throttlemeet_v2/src/features/events/domain/entities/event_rsvp_attendee.dart';
 import 'package:throttlemeet_v2/src/features/events/domain/entities/rsvp_status.dart';
 import 'package:throttlemeet_v2/src/features/events/domain/repositories/events_repository.dart';
 import 'package:throttlemeet_v2/src/features/events/presentation/controllers/events_controller.dart';
@@ -578,6 +579,63 @@ void main() {
       expect(controller.errorMessage, isNull);
     });
   });
+
+  group('EventsController owner RSVP list', () {
+    test('loads owner attendee data independently from event state', () async {
+      final attendee = EventRsvpAttendee(
+        userId: 'user-a',
+        displayName: 'Avery Driver',
+        avatarUrl: null,
+        status: RsvpStatus.going,
+        updatedAt: DateTime.utc(2026, 7, 1, 12),
+      );
+      final repository = _FakeEventsRepository(events: [_existingEvent])
+        ..ownerRsvpAttendees = [attendee];
+      final controller = EventsController(repository: repository);
+      addTearDown(controller.dispose);
+      await controller.loadEvents();
+
+      final succeeded = await controller.loadEventRsvpsForOwner(
+        _existingEvent.id,
+      );
+
+      expect(succeeded, isTrue);
+      expect(controller.ownerRsvpListStatus, OwnerRsvpListStatus.data);
+      expect(controller.ownerRsvpAttendees, [attendee]);
+      expect(controller.ownerRsvpListErrorMessage, isNull);
+      expect(controller.events, [_existingEvent]);
+      expect(controller.errorMessage, isNull);
+    });
+
+    test('failed load exposes separate retry state and can recover', () async {
+      final repository = _FakeEventsRepository(events: [_existingEvent])
+        ..ownerRsvpListError = _failure;
+      final controller = EventsController(repository: repository);
+      addTearDown(controller.dispose);
+      await controller.loadEvents();
+
+      expect(
+        await controller.loadEventRsvpsForOwner(_existingEvent.id),
+        isFalse,
+      );
+      expect(controller.ownerRsvpListStatus, OwnerRsvpListStatus.error);
+      expect(
+        controller.ownerRsvpListErrorMessage,
+        'Unable to load organizer attendance.',
+      );
+      expect(controller.events, [_existingEvent]);
+      expect(controller.errorMessage, isNull);
+
+      repository.ownerRsvpListError = null;
+      expect(
+        await controller.loadEventRsvpsForOwner(_existingEvent.id),
+        isTrue,
+      );
+      expect(controller.ownerRsvpListStatus, OwnerRsvpListStatus.data);
+      expect(controller.ownerRsvpListErrorMessage, isNull);
+      expect(repository.ownerRsvpListCallCount, 2);
+    });
+  });
 }
 
 final _failure = StateError('Fake repository failure');
@@ -639,6 +697,9 @@ class _FakeEventsRepository implements EventsRepository {
   Object? updateError;
   Object? updateEventError;
   Object? cancelError;
+  Object? ownerRsvpListError;
+  List<EventRsvpAttendee> ownerRsvpAttendees = const [];
+  int ownerRsvpListCallCount = 0;
   int loadCallCount = 0;
 
   @override
@@ -671,6 +732,16 @@ class _FakeEventsRepository implements EventsRepository {
       }
     }
     return null;
+  }
+
+  @override
+  Future<List<EventRsvpAttendee>> getEventRsvpsForOwner(String eventId) async {
+    ownerRsvpListCallCount += 1;
+    final error = ownerRsvpListError;
+    if (error != null) {
+      throw error;
+    }
+    return ownerRsvpAttendees;
   }
 
   @override
@@ -753,6 +824,11 @@ class _SequencedEventsRepository implements EventsRepository {
 
   @override
   Future<Event?> getEventById(String id) async => null;
+
+  @override
+  Future<List<EventRsvpAttendee>> getEventRsvpsForOwner(String eventId) async {
+    return const [];
+  }
 
   @override
   Future<List<Event>> getEvents() {

@@ -1,5 +1,6 @@
 import '../../domain/entities/event.dart';
 import '../../domain/entities/event_snapshot.dart';
+import '../../domain/entities/event_rsvp_attendee.dart';
 import '../../domain/entities/rsvp_status.dart';
 import '../../domain/repositories/events_repository.dart';
 import '../seeds/seed_events.dart';
@@ -46,6 +47,11 @@ class InMemoryEventsRepository implements EventsRepository {
     } on StateError {
       return null;
     }
+  }
+
+  @override
+  Future<List<EventRsvpAttendee>> getEventRsvpsForOwner(String eventId) async {
+    return const [];
   }
 
   @override

@@ -11,6 +11,7 @@ import 'package:throttlemeet_v2/src/features/auth/domain/repositories/profile_re
 import 'package:throttlemeet_v2/src/features/auth/presentation/controllers/auth_bootstrap_controller.dart';
 import 'package:throttlemeet_v2/src/features/events/domain/entities/event.dart';
 import 'package:throttlemeet_v2/src/features/events/domain/entities/event_snapshot.dart';
+import 'package:throttlemeet_v2/src/features/events/domain/entities/event_rsvp_attendee.dart';
 import 'package:throttlemeet_v2/src/features/events/domain/entities/rsvp_status.dart';
 import 'package:throttlemeet_v2/src/features/events/domain/repositories/events_repository.dart';
 import 'package:throttlemeet_v2/src/features/events/presentation/controllers/events_controller.dart';
@@ -357,6 +358,11 @@ class _TrackingEventsRepository implements EventsRepository {
 
   @override
   Future<Event?> getEventById(String id) async => null;
+
+  @override
+  Future<List<EventRsvpAttendee>> getEventRsvpsForOwner(String eventId) async {
+    return const [];
+  }
 
   @override
   Future<List<Event>> getEvents() async {

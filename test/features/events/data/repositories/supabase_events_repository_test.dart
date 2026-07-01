@@ -210,6 +210,78 @@ void main() {
     );
 
     test(
+      'getEventRsvpsForOwner uses owner RPC and maps limited profile fields',
+      () async {
+        late Request request;
+        final client = _clientWith((receivedRequest) async {
+          request = receivedRequest;
+          return _jsonResponse(receivedRequest, [
+            {
+              'user_id': 'user-a',
+              'display_name': 'Avery Driver',
+              'avatar_url': 'https://example.com/avery.jpg',
+              'status': 'going',
+              'updated_at': '2026-07-01T12:00:00Z',
+            },
+            {
+              'user_id': 'user-b',
+              'display_name': null,
+              'avatar_url': null,
+              'status': 'notGoing',
+              'updated_at': '2026-07-01T13:00:00Z',
+            },
+          ]);
+        });
+        addTearDown(client.dispose);
+        final repository = SupabaseEventsRepository(
+          authSessionProvider: const _FakeAuthSessionProvider(userId),
+          client: client,
+        );
+
+        final attendees = await repository.getEventRsvpsForOwner('event-42');
+
+        expect(request.method, 'POST');
+        expect(request.url.path, '/rest/v1/rpc/get_event_rsvps_for_owner_v1');
+        expect(jsonDecode(request.body), {'event_id': 'event-42'});
+        expect(request.body, isNot(contains('participant_id')));
+        expect(request.body, isNot(contains('user_id')));
+        expect(attendees, hasLength(2));
+        expect(attendees.first.userId, 'user-a');
+        expect(attendees.first.displayName, 'Avery Driver');
+        expect(attendees.first.avatarUrl, 'https://example.com/avery.jpg');
+        expect(attendees.first.status, RsvpStatus.going);
+        expect(attendees.first.updatedAt, DateTime.utc(2026, 7, 1, 12));
+        expect(attendees.last.displayName, isNull);
+        expect(attendees.last.avatarUrl, isNull);
+        expect(attendees.last.status, RsvpStatus.notGoing);
+      },
+    );
+
+    test('getEventRsvpsForOwner rejects an unknown RSVP status', () async {
+      final client = _clientWith(
+        (request) async => _jsonResponse(request, [
+          {
+            'user_id': 'user-a',
+            'display_name': 'Avery Driver',
+            'avatar_url': null,
+            'status': 'maybe',
+            'updated_at': '2026-07-01T12:00:00Z',
+          },
+        ]),
+      );
+      addTearDown(client.dispose);
+      final repository = SupabaseEventsRepository(
+        authSessionProvider: const _FakeAuthSessionProvider(userId),
+        client: client,
+      );
+
+      await expectLater(
+        repository.getEventRsvpsForOwner('event-42'),
+        _throwsAppError(AppErrorType.validationOrServer),
+      );
+    });
+
+    test(
       'accepted remote refresh replaces the authenticated user cache',
       () async {
         final cachedAt = DateTime.utc(2026, 6, 28, 12);

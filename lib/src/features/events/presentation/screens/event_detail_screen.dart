@@ -4,6 +4,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../../core/utils/date_time_formatter.dart';
 import '../../../../core/widgets/app_empty_state.dart';
 import '../../domain/entities/event.dart';
+import '../../domain/entities/event_rsvp_attendee.dart';
 import '../../domain/entities/rsvp_status.dart';
 import '../controllers/events_controller.dart';
 import '../widgets/rsvp_selector.dart';
@@ -134,6 +135,19 @@ class _EventDetailBody extends StatefulWidget {
 
 class _EventDetailBodyState extends State<_EventDetailBody> {
   bool _isUpdatingRsvp = false;
+  String? _requestedOwnerRsvpEventId;
+
+  @override
+  void initState() {
+    super.initState();
+    _requestOwnerRsvpListIfNeeded();
+  }
+
+  @override
+  void didUpdateWidget(covariant _EventDetailBody oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _requestOwnerRsvpListIfNeeded();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -201,6 +215,13 @@ class _EventDetailBodyState extends State<_EventDetailBody> {
                     ),
                   ),
                 ),
+                if (event.isOwnedByViewer) ...[
+                  const SizedBox(height: 16),
+                  _OrganizerAttendanceSection(
+                    eventId: event.id,
+                    controller: widget.controller,
+                  ),
+                ],
                 if (widget.onEdit != null && widget.onCancel != null) ...[
                   const SizedBox(height: 16),
                   _OrganizerControls(
@@ -214,6 +235,19 @@ class _EventDetailBodyState extends State<_EventDetailBody> {
         ),
       ],
     );
+  }
+
+  void _requestOwnerRsvpListIfNeeded() {
+    final event = widget.event;
+    if (!event.isOwnedByViewer || _requestedOwnerRsvpEventId == event.id) {
+      return;
+    }
+    _requestedOwnerRsvpEventId = event.id;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        widget.controller.loadEventRsvpsForOwner(event.id);
+      }
+    });
   }
 
   Future<void> _updateRsvp(RsvpStatus status) async {
@@ -261,8 +295,207 @@ class _EventDetailBodyState extends State<_EventDetailBody> {
     }
 
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Unable to open maps for this location.'),
+      const SnackBar(content: Text('Unable to open maps for this location.')),
+    );
+  }
+}
+
+class _OrganizerAttendanceSection extends StatelessWidget {
+  const _OrganizerAttendanceSection({
+    required this.eventId,
+    required this.controller,
+  });
+
+  final String eventId;
+  final EventsController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final matchesEvent = controller.ownerRsvpListEventId == eventId;
+    final status = matchesEvent
+        ? controller.ownerRsvpListStatus
+        : OwnerRsvpListStatus.idle;
+    final attendees = matchesEvent
+        ? controller.ownerRsvpAttendees
+        : const <EventRsvpAttendee>[];
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text('Organizer Attendance', style: theme.textTheme.titleLarge),
+            const SizedBox(height: 6),
+            Text(
+              'Authenticated beta testers who responded to this event.',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            if (status == OwnerRsvpListStatus.loading ||
+                status == OwnerRsvpListStatus.idle) ...[
+              const SizedBox(height: 16),
+              const LinearProgressIndicator(),
+            ],
+            if (status == OwnerRsvpListStatus.error) ...[
+              const SizedBox(height: 16),
+              _OrganizerAttendanceError(
+                message:
+                    controller.ownerRsvpListErrorMessage ??
+                    'Unable to load organizer attendance.',
+                onRetry: () => controller.loadEventRsvpsForOwner(eventId),
+              ),
+            ],
+            if (attendees.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              _AttendanceCounts(attendees: attendees),
+              const SizedBox(height: 16),
+              for (final rsvpStatus in RsvpStatus.values)
+                if (attendees.any(
+                  (attendee) => attendee.status == rsvpStatus,
+                )) ...[
+                  _AttendanceGroup(
+                    status: rsvpStatus,
+                    attendees: attendees
+                        .where((attendee) => attendee.status == rsvpStatus)
+                        .toList(growable: false),
+                  ),
+                  if (rsvpStatus != RsvpStatus.notGoing)
+                    const SizedBox(height: 14),
+                ],
+            ] else if (status == OwnerRsvpListStatus.data) ...[
+              const SizedBox(height: 16),
+              const Text('No authenticated RSVPs yet.'),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AttendanceCounts extends StatelessWidget {
+  const _AttendanceCounts({required this.attendees});
+
+  final List<EventRsvpAttendee> attendees;
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: RsvpStatus.values
+          .map((status) {
+            final count = attendees
+                .where((attendee) => attendee.status == status)
+                .length;
+            return Chip(label: Text('${status.label}: $count'));
+          })
+          .toList(growable: false),
+    );
+  }
+}
+
+class _AttendanceGroup extends StatelessWidget {
+  const _AttendanceGroup({required this.status, required this.attendees});
+
+  final RsvpStatus status;
+  final List<EventRsvpAttendee> attendees;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          status.label,
+          style: theme.textTheme.titleSmall?.copyWith(
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 6),
+        for (final attendee in attendees) _AttendancePerson(attendee: attendee),
+      ],
+    );
+  }
+}
+
+class _AttendancePerson extends StatelessWidget {
+  const _AttendancePerson({required this.attendee});
+
+  final EventRsvpAttendee attendee;
+
+  @override
+  Widget build(BuildContext context) {
+    final displayName = attendee.displayName?.trim();
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Row(
+        children: [
+          CircleAvatar(
+            radius: 16,
+            backgroundColor: Theme.of(context).colorScheme.secondaryContainer,
+            child: Icon(
+              Icons.person_outline,
+              size: 18,
+              color: Theme.of(context).colorScheme.onSecondaryContainer,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              displayName == null || displayName.isEmpty
+                  ? 'Anonymous tester'
+                  : displayName,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _OrganizerAttendanceError extends StatelessWidget {
+  const _OrganizerAttendanceError({
+    required this.message,
+    required this.onRetry,
+  });
+
+  final String message;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colorScheme.errorContainer,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 8, 4, 8),
+        child: Row(
+          children: [
+            Icon(Icons.error_outline, color: colorScheme.onErrorContainer),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                message,
+                style: TextStyle(color: colorScheme.onErrorContainer),
+              ),
+            ),
+            TextButton(
+              onPressed: onRetry,
+              style: TextButton.styleFrom(
+                foregroundColor: colorScheme.onErrorContainer,
+              ),
+              child: const Text('Retry'),
+            ),
+          ],
+        ),
       ),
     );
   }

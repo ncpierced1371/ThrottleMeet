@@ -10,6 +10,7 @@ import 'package:throttlemeet_v2/src/features/events/data/repositories/in_memory_
 import 'package:throttlemeet_v2/src/features/events/data/seeds/seed_events.dart';
 import 'package:throttlemeet_v2/src/features/events/domain/entities/event.dart';
 import 'package:throttlemeet_v2/src/features/events/domain/entities/event_snapshot.dart';
+import 'package:throttlemeet_v2/src/features/events/domain/entities/event_rsvp_attendee.dart';
 import 'package:throttlemeet_v2/src/features/events/domain/entities/rsvp_status.dart';
 import 'package:throttlemeet_v2/src/features/events/domain/repositories/events_repository.dart';
 import 'package:throttlemeet_v2/src/features/events/presentation/controllers/events_controller.dart';
@@ -310,6 +311,12 @@ void main() {
     expect(find.byTooltip('Edit event'), findsOneWidget);
     expect(find.byTooltip('Cancel event'), findsOneWidget);
     expect(find.text('Open in Maps'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('Organizer Attendance'),
+      250,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('Organizer Attendance'), findsOneWidget);
 
     final nonOwnerRepository = _ToggleEventsRepository(
       events: [_lifecycleEvent()],
@@ -329,6 +336,100 @@ void main() {
 
     expect(find.byTooltip('Edit event'), findsNothing);
     expect(find.byTooltip('Cancel event'), findsNothing);
+    expect(find.text('Organizer Attendance'), findsNothing);
+    expect(nonOwnerRepository.ownerRsvpCallCount, 0);
+  });
+
+  testWidgets('owner attendance groups statuses and hides user IDs', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(800, 1400));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final repository =
+        _ToggleEventsRepository(
+            events: [_lifecycleEvent(isOwnedByViewer: true)],
+          )
+          ..ownerRsvpAttendees = [
+            EventRsvpAttendee(
+              userId: 'private-user-a',
+              displayName: 'Avery Driver',
+              avatarUrl: 'https://example.com/avery.jpg',
+              status: RsvpStatus.going,
+              updatedAt: DateTime.utc(2026, 7, 1, 12),
+            ),
+            EventRsvpAttendee(
+              userId: 'private-user-b',
+              displayName: null,
+              avatarUrl: null,
+              status: RsvpStatus.interested,
+              updatedAt: DateTime.utc(2026, 7, 1, 13),
+            ),
+            EventRsvpAttendee(
+              userId: 'private-user-c',
+              displayName: 'Casey',
+              avatarUrl: null,
+              status: RsvpStatus.notGoing,
+              updatedAt: DateTime.utc(2026, 7, 1, 14),
+            ),
+          ];
+    final controller = EventsController(repository: repository);
+    addTearDown(controller.dispose);
+    await controller.loadEvents();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EventDetailScreen(
+          controller: controller,
+          eventId: 'lifecycle-event',
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Organizer Attendance'), findsOneWidget);
+    expect(find.text('Going: 1'), findsOneWidget);
+    expect(find.text('Interested: 1'), findsOneWidget);
+    expect(find.text('Not going: 1'), findsOneWidget);
+    expect(find.text('Avery Driver'), findsOneWidget);
+    expect(find.text('Anonymous tester'), findsOneWidget);
+    expect(find.text('Casey'), findsOneWidget);
+    expect(find.textContaining('private-user-'), findsNothing);
+  });
+
+  testWidgets('owner attendance failure shows retry without breaking detail', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(800, 1400));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final repository = _ToggleEventsRepository(
+      events: [_lifecycleEvent(isOwnedByViewer: true)],
+    )..ownerRsvpError = StateError('attendance unavailable');
+    final controller = EventsController(repository: repository);
+    addTearDown(controller.dispose);
+    await controller.loadEvents();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EventDetailScreen(
+          controller: controller,
+          eventId: 'lifecycle-event',
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Lifecycle Meet'), findsOneWidget);
+    expect(find.text('Organizer Attendance'), findsOneWidget);
+    expect(find.text('Unable to load organizer attendance.'), findsOneWidget);
+    expect(find.text('Retry'), findsOneWidget);
+
+    repository.ownerRsvpError = null;
+    await tester.tap(find.text('Retry'));
+    await tester.pumpAndSettle();
+
+    expect(repository.ownerRsvpCallCount, 2);
+    expect(find.text('No authenticated RSVPs yet.'), findsOneWidget);
+    expect(find.text('Lifecycle Meet'), findsOneWidget);
   });
 
   testWidgets('hides maps action when the event location is empty', (
@@ -502,6 +603,9 @@ class _ToggleEventsRepository implements EventsRepository {
   final List<Event> _events;
   final EventSnapshot? cachedSnapshot;
   int cancelCallCount = 0;
+  List<EventRsvpAttendee> ownerRsvpAttendees = const [];
+  Object? ownerRsvpError;
+  int ownerRsvpCallCount = 0;
 
   @override
   Future<EventSnapshot?> getCachedEvents() async => cachedSnapshot;
@@ -542,6 +646,16 @@ class _ToggleEventsRepository implements EventsRepository {
       }
     }
     return null;
+  }
+
+  @override
+  Future<List<EventRsvpAttendee>> getEventRsvpsForOwner(String eventId) async {
+    ownerRsvpCallCount += 1;
+    final error = ownerRsvpError;
+    if (error != null) {
+      throw error;
+    }
+    return ownerRsvpAttendees;
   }
 
   @override
@@ -596,6 +710,11 @@ class _PendingRsvpRepository implements EventsRepository {
 
   @override
   Future<Event?> getEventById(String id) async => id == event.id ? event : null;
+
+  @override
+  Future<List<EventRsvpAttendee>> getEventRsvpsForOwner(String eventId) async {
+    return const [];
+  }
 
   @override
   Future<List<Event>> getEvents() async => [event];
