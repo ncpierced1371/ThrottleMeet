@@ -37,7 +37,7 @@ class DiagnosticReport {
 
   String toPlainText() {
     return [
-      'ThrottleMeet Beta Diagnostics',
+      'Throttle Meet Beta Diagnostics',
       'Version: $appVersion',
       'Build: $buildNumber',
       'Release channel: $releaseChannel',

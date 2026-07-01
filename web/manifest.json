@@ -1,6 +1,6 @@
 {
-    "name": "throttlemeet_v2",
-    "short_name": "throttlemeet_v2",
+    "name": "Throttle Meet",
+    "short_name": "Throttle Meet",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

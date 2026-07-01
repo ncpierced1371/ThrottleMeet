@@ -1,4 +1,4 @@
-# ThrottleMeet Authenticated Beta Smoke Test
+# Throttle Meet Authenticated Beta Smoke Test
 
 ## Purpose
 
@@ -59,10 +59,10 @@ the test report.
 
 A successful startup has all of these results:
 
-- [ ] The ThrottleMeet window opens.
+- [ ] The Throttle Meet window opens.
 - [ ] A short loading indicator may appear.
 - [ ] The event list, an empty-event state, or saved events then appear.
-- [ ] The full-screen message `Unable to start ThrottleMeet.` does not appear.
+- [ ] The full-screen message `Unable to start Throttle Meet.` does not appear.
 - [ ] The terminal does not show an unhandled exception.
 
 Pass: the app reaches the Events screen with no unhandled exception.
@@ -118,7 +118,7 @@ Use only a coordinator-approved clean test session.
 5. Reconnect to the network.
 6. Select `Retry`.
 
-- [ ] The app shows `Unable to start ThrottleMeet.` while authentication cannot
+- [ ] The app shows `Unable to start Throttle Meet.` while authentication cannot
   complete.
 - [ ] Events are not created or loaded before a user exists.
 - [ ] A `Retry` action is visible.

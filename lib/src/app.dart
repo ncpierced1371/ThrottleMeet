@@ -132,7 +132,7 @@ class _ThrottleMeetAppState extends State<ThrottleMeetApp> {
   Widget build(BuildContext context) {
     return MaterialApp(
       scaffoldMessengerKey: _scaffoldMessengerKey,
-      title: 'ThrottleMeet',
+      title: 'Throttle Meet',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light(),
       home: switch (_authBootstrapController.state) {
@@ -170,7 +170,7 @@ class _AuthErrorScreen extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text('Unable to start ThrottleMeet.'),
+            const Text('Unable to start Throttle Meet.'),
             const SizedBox(height: 12),
             FilledButton(onPressed: onRetry, child: const Text('Retry')),
           ],

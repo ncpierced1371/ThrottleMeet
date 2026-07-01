@@ -29,7 +29,7 @@ class DiagnosticsScreen extends StatelessWidget {
             padding: const EdgeInsets.all(16),
             children: [
               Text(
-                'ThrottleMeet',
+                'Throttle Meet',
                 style: Theme.of(context).textTheme.headlineSmall,
               ),
               const SizedBox(height: 4),

@@ -40,7 +40,7 @@ void main() {
     await tester.pumpWidget(_eventsListApp(controller));
     await tester.pumpAndSettle();
 
-    expect(find.text('ThrottleMeet'), findsOneWidget);
+    expect(find.text('Throttle Meet'), findsOneWidget);
     expect(find.text('Spring Canyon Run'), findsOneWidget);
     expect(find.text('Create Event'), findsOneWidget);
   });

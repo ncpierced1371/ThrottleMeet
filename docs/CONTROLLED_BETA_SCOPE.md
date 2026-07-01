@@ -1,4 +1,4 @@
-# ThrottleMeet Controlled Beta Scope
+# Throttle Meet Controlled Beta Scope
 
 ## Purpose
 
@@ -166,7 +166,7 @@ beta prerequisites.
 ## 4. Public-Beta Blockers
 
 The authenticated controlled-beta architecture removes several earlier
-blockers, but it is not sufficient for public beta. ThrottleMeet must not move
+blockers, but it is not sufficient for public beta. Throttle Meet must not move
 to public beta until all of the following are complete:
 
 - Replace device-bound anonymous-only identity with a user-manageable account

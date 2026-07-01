@@ -10,7 +10,7 @@ class SeedEvents {
         description:
             'An easy Saturday drive with a coffee meetup, scenic pull-offs, and a relaxed social pace.',
         locationName: 'Cold Spring Ridge',
-        hostName: 'ThrottleMeet Crew',
+        hostName: 'Throttle Meet Crew',
         startTime: DateTime(2026, 5, 2, 9, 30),
         endTime: DateTime(2026, 5, 2, 11, 30),
         attendeeCount: 18,

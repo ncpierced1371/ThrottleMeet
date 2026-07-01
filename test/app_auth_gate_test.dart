@@ -199,7 +199,7 @@ void main() {
 
     expect(authController.state, AuthBootstrapState.error);
     expect(eventsControllerCreationCount, 0);
-    expect(find.text('Unable to start ThrottleMeet.'), findsOneWidget);
+    expect(find.text('Unable to start Throttle Meet.'), findsOneWidget);
   });
 
   testWidgets('authenticated user change recreates EventsController', (

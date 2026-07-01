@@ -32,7 +32,7 @@ class _EventsListScreenState extends State<EventsListScreen> {
       builder: (context, _) {
         return Scaffold(
           appBar: AppBar(
-            title: const Text('ThrottleMeet'),
+            title: const Text('Throttle Meet'),
             actions: [
               IconButton(
                 onPressed: () {
